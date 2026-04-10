@@ -75,3 +75,20 @@ export const ReactorReadAbi = [
     stateMutability: "view",
   },
 ] as const;
+
+export const ReactorV2ReadAbi = [
+  {
+    type: "function", name: "pendingFills",
+    inputs: [{ name: "intentId", type: "bytes32" }],
+    outputs: [
+      { name: "solver", type: "address" },
+      { name: "recipient", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "bond", type: "uint256" },
+      { name: "challengeEnd", type: "uint64" },
+      { name: "finalized", type: "bool" },
+      { name: "slashed", type: "bool" },
+    ],
+    stateMutability: "view",
+  },
+] as const;

@@ -1,0 +1,29 @@
+{
+  "scenario": "Fraud proof demo — fake intentId challenged and slashed on-chain",
+  "chain": "Base Sepolia (84532)",
+  "contract": "SettlementReactorV2 @ 0xDBd5A5B317256DbE9b5Ccc5ebF810715091394cE",
+  "steps": {
+    "1_fill": {
+      "description": "Attester signed receipt for non-existent intentId, solver called fill() + 0.01 ETH bond",
+      "txHash": "0x1a99d91bc2ccc3f6ae0ba7a261629d9bf4c65e9ade5682ad8e2c71e4628afdcb",
+      "block": 40031355,
+      "intentId": "0xDEADBEEF000000000000000000000000000000000000000000000000FACADE01",
+      "bond": "0.01 ETH"
+    },
+    "2_challenge": {
+      "description": "Watcher detected NO_INTENT fraud, signed FraudProof, challenger called challenge() — bond sent to challenger",
+      "txHash": "0xefff21203124ad6ab4800a94d719f78b87f51aebe1eb113503ad51af6ba87bd3",
+      "block": 40031409,
+      "challenger": "0x1b6710580E91fD05Fb2B7fdE7E15BAb3252Df57A",
+      "fraudType": "NO_INTENT (0)",
+      "bondSlashed": "0.01 ETH → challenger"
+    }
+  },
+  "result": {
+    "slashed": true,
+    "finalized": false,
+    "usdcTransferred": false,
+    "bondDestination": "challenger (bounty)"
+  },
+  "timestamp": "2026-04-10T18:30:00Z"
+}

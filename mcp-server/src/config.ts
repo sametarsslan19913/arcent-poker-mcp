@@ -15,6 +15,7 @@ export const config = {
   baseUsdc: env("BASE_USDC", "0x036CbD53842c5426634e7929541eC2318f3dCF7e") as `0x${string}`,
   intentVault: env("INTENT_VAULT", "0xb72C382e7f5F73d36C1FDe167601099B596f3194") as `0x${string}`,
   settlementReactor: env("SETTLEMENT_REACTOR", "0xb72C382e7f5F73d36C1FDe167601099B596f3194") as `0x${string}`,
+  settlementReactorV2: env("SETTLEMENT_REACTOR_V2", "0xDBd5A5B317256DbE9b5Ccc5ebF810715091394cE") as `0x${string}`,
   feeBps: 0,
   defaultSlippageBps: 50,
   defaultDeadlineSec: 900,
