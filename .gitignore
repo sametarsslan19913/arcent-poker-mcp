@@ -1,0 +1,51 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+wallets.json
+*.key
+*.pem
+*privatekey*
+*private_key*
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+
+# TypeScript
+*.tsbuildinfo
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/*/run-*.json
+contracts/broadcast/*/*/run-*.txt
+contracts/lib/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+
+# Test coverage
+coverage/
+*.lcov
