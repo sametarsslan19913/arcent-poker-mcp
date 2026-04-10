@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "arcent-bridge": {
+      "command": "npx",
+      "args": ["tsx", "mcp-server/src/index.ts"],
+      "cwd": "C:\\arcbridge",
+      "env": {
+        "ARC_RPC": "https://rpc.testnet.arc.network",
+        "BASE_RPC": "https://sepolia.base.org",
+        "ARC_USDC": "0x911b4000d3422f482f4062a913885f7b035382df",
+        "BASE_USDC": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "INTENT_VAULT": "0xb72C382e7f5F73d36C1FDe167601099B596f3194",
+        "SETTLEMENT_REACTOR": "0xb72C382e7f5F73d36C1FDe167601099B596f3194"
+      }
+    }
+  }
+}
