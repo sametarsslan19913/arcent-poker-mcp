@@ -11,6 +11,7 @@ import { jobCompleteHandler } from "./tools/job_complete.js";
 import { jobStatusHandler } from "./tools/job_status.js";
 import { sendUsdcHandler } from "./tools/send_usdc.js";
 import { bridgeSendHandler } from "./tools/bridge_send.js";
+import { balanceHandler } from "./tools/balance.js";
 
 const server = new McpServer({
   name: "arc-agent-toolkit",
@@ -159,10 +160,19 @@ server.tool(
   async (args) => bridgeSendHandler(args),
 );
 
+server.tool(
+  "balance",
+  "Check USDC and EURC balances for any wallet on Arc Testnet.",
+  {
+    address: z.string().describe("Wallet address to check"),
+  },
+  async (args) => balanceHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
 process.stderr.write("arc-agent-toolkit MCP server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arc-agent-toolkit MCP server connected. 11 tools registered.\n");
+process.stderr.write("arc-agent-toolkit MCP server connected. 12 tools registered.\n");
