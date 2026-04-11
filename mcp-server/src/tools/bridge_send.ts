@@ -1,80 +1,111 @@
-import { encodeFunctionData, keccak256, encodeAbiParameters, parseAbiParameters } from "viem";
+import { encodeFunctionData, pad } from "viem";
 import { config } from "../config.js";
-import { arcClient, ERC20ReadAbi, IntentVaultReadAbi } from "../chains.js";
-import { err, errorResult, okResult } from "../errors.js";
-import { randomBytes } from "node:crypto";
+import { arcClient, ERC20Abi, TokenMessengerV2Abi } from "../chains.js";
+import { okResult, errorResult, err } from "../errors.js";
 
-const DECIMALS_DIFF = 10n ** 12n;
+// CCTP domain IDs — https://developers.circle.com/stablecoins/supported-domains
+const DOMAIN_MAP: Record<string, number> = {
+  "ethereum_sepolia": 0,
+  "avalanche_fuji": 1,
+  "arbitrum_sepolia": 3,
+  "base_sepolia": 6,
+  "polygon_amoy": 7,
+  "arc_testnet": 26,
+};
 
-const createIntentAbi = [{
-  type: "function" as const, name: "createIntent",
-  inputs: [
-    { name: "recipient", type: "address" },
-    { name: "amountIn", type: "uint256" },
-    { name: "minAmountOut", type: "uint256" },
-    { name: "dstChainId", type: "uint256" },
-    { name: "deadline", type: "uint64" },
-    { name: "salt", type: "bytes32" },
-  ],
-  outputs: [{ name: "intentId", type: "bytes32" }],
-  stateMutability: "nonpayable",
-}] as const;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export async function bridgeSendHandler(args: {
-  maker: string; srcChainId: number; dstChainId: number;
-  amountIn: string; recipient: string;
-  minAmountOut?: string; deadline?: number; salt?: string;
+  from: string;
+  amountUsdc: string;
+  destinationChain: string;
+  recipient: string;
 }) {
-  const maker = args.maker as `0x${string}`;
-  const { srcChainId, dstChainId } = args;
-  const amountIn = BigInt(args.amountIn);
+  const from = args.from as `0x${string}`;
   const recipient = args.recipient as `0x${string}`;
+  const amount = BigInt(Math.round(parseFloat(args.amountUsdc) * 1_000_000));
+  const destChain = args.destinationChain.toLowerCase().replace(/[\s-]/g, "_");
 
-  if (srcChainId === dstChainId) return errorResult(err("E_INVALID_CHAIN_PAIR", "Source and destination must differ"));
-  if (amountIn === 0n) return errorResult(err("E_AMOUNT_ZERO", "amountIn must be > 0"));
-  if (!maker || maker === "0x0000000000000000000000000000000000000000") return errorResult(err("E_BAD_ADDRESS", "Maker cannot be zero"));
-  if (!recipient || recipient === "0x0000000000000000000000000000000000000000") return errorResult(err("E_RECIPIENT_ZERO", "Recipient cannot be zero"));
-
-  try {
-    const [balance, allowance, nonce] = await Promise.all([
-      arcClient.readContract({ address: config.arcUsdc, abi: ERC20ReadAbi, functionName: "balanceOf", args: [maker] }),
-      arcClient.readContract({ address: config.arcUsdc, abi: ERC20ReadAbi, functionName: "allowance", args: [maker, config.intentVault] }),
-      arcClient.readContract({ address: config.intentVault, abi: IntentVaultReadAbi, functionName: "nonces", args: [maker] }),
-    ]);
-
-    if (balance < amountIn) return errorResult(err("E_INSUFFICIENT_BALANCE", `Balance ${balance} < amountIn ${amountIn}`));
-    if (allowance < amountIn) return errorResult(err("E_INSUFFICIENT_ALLOWANCE", `Allowance ${allowance} < amountIn ${amountIn}`));
-
-    const deadline = args.deadline ?? Math.floor(Date.now() / 1000) + config.defaultDeadlineSec;
-    if (deadline <= Math.floor(Date.now() / 1000)) return errorResult(err("E_INVALID_DEADLINE", "Deadline must be in the future"));
-
-    const salt = (args.salt ?? "0x" + randomBytes(32).toString("hex")) as `0x${string}`;
-    const amountOut6 = amountIn / DECIMALS_DIFF;
-    const minAmountOut = args.minAmountOut ? BigInt(args.minAmountOut) : amountOut6 - (amountOut6 * BigInt(config.defaultSlippageBps)) / 10000n;
-
-    const encoded = encodeAbiParameters(
-      parseAbiParameters("address,address,uint256,uint256,uint256,uint256,uint64,uint64,bytes32"),
-      [maker, recipient, amountIn, minAmountOut, BigInt(srcChainId), BigInt(dstChainId), BigInt(deadline), BigInt(nonce), salt]
-    );
-    const intentId = keccak256(encoded);
-
-    const calldata = encodeFunctionData({
-      abi: createIntentAbi,
-      functionName: "createIntent",
-      args: [recipient, amountIn, minAmountOut, BigInt(dstChainId), BigInt(deadline), salt],
-    });
-
-    const warnings: string[] = [];
-    if (amountIn < 1000000000000000000n) warnings.push("Small amount: less than 1 USDC");
-
-    return okResult({
-      unsignedTx: { to: config.intentVault, data: calldata, value: "0", chainId: srcChainId },
-      intentId,
-      nonce: Number(nonce),
-      intent: { maker, recipient, amountIn: amountIn.toString(), minAmountOut: minAmountOut.toString(), srcChainId, dstChainId, deadline, nonce: Number(nonce), salt },
-      ...(warnings.length > 0 ? { warnings } : {}),
-    });
-  } catch (e: any) {
-    return errorResult(err("E_RPC_FAILURE", `RPC call failed: ${e.message}`));
+  if (!from || from === ZERO_ADDRESS) {
+    return errorResult(err("E_INVALID_FROM", "Sender address cannot be zero"));
   }
+  if (!recipient || recipient === ZERO_ADDRESS) {
+    return errorResult(err("E_INVALID_RECIPIENT", "Recipient address cannot be zero"));
+  }
+  if (amount <= 0n) {
+    return errorResult(err("E_ZERO_AMOUNT", "Amount must be greater than zero"));
+  }
+
+  const destDomain = DOMAIN_MAP[destChain];
+  if (destDomain === undefined) {
+    return errorResult(err("E_UNSUPPORTED_CHAIN",
+      `Unsupported destination chain: ${args.destinationChain}. Supported: ${Object.keys(DOMAIN_MAP).join(", ")}`));
+  }
+
+  // Check USDC balance
+  const balance = await arcClient.readContract({
+    address: config.usdc,
+    abi: ERC20Abi,
+    functionName: "balanceOf",
+    args: [from],
+  }) as bigint;
+
+  if (balance < amount) {
+    return errorResult(err("E_INSUFFICIENT_BALANCE",
+      `Insufficient USDC: have ${(Number(balance) / 1_000_000).toFixed(2)}, need ${args.amountUsdc}`));
+  }
+
+  // Check allowance
+  const allowance = await arcClient.readContract({
+    address: config.usdc,
+    abi: ERC20Abi,
+    functionName: "allowance",
+    args: [from, config.cctpTokenMessenger],
+  }) as bigint;
+
+  const txs: Array<{ step: string; to: string; data: string; value: string; chainId: number }> = [];
+
+  // Step 1: Approve CCTP if needed
+  if (allowance < amount) {
+    const approveData = encodeFunctionData({
+      abi: ERC20Abi,
+      functionName: "approve",
+      args: [config.cctpTokenMessenger, amount],
+    });
+    txs.push({
+      step: "1_approve",
+      to: config.usdc,
+      data: approveData,
+      value: "0",
+      chainId: config.arcChainId,
+    });
+  }
+
+  // Step 2: depositForBurn
+  const mintRecipient = pad(recipient, { size: 32 }); // bytes32 left-padded
+  const burnData = encodeFunctionData({
+    abi: TokenMessengerV2Abi,
+    functionName: "depositForBurn",
+    args: [amount, destDomain, mintRecipient, config.usdc],
+  });
+
+  txs.push({
+    step: allowance >= amount ? "1_burn" : "2_burn",
+    to: config.cctpTokenMessenger,
+    data: burnData,
+    value: "0",
+    chainId: config.arcChainId,
+  });
+
+  return okResult({
+    unsignedTxs: txs,
+    from,
+    recipient: args.recipient,
+    amountUsdc: args.amountUsdc,
+    amountRaw: amount.toString(),
+    destinationDomain: destDomain,
+    destinationChain: args.destinationChain,
+    needsApproval: allowance < amount,
+    note: "CCTP bridge: USDC is burned on Arc and minted on destination chain. Attestation takes ~1-2 minutes. Send transactions in order.",
+  });
 }

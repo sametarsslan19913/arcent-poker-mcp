@@ -1,12 +1,10 @@
 import { createPublicClient, http } from "viem";
-import { baseSepolia } from "viem/chains";
 import { config } from "./config.js";
 
-// Arc testnet chain definition (not in viem defaults)
-const arcTestnet = {
+export const arcTestnet = {
   id: config.arcChainId,
   name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
   rpcUrls: { default: { http: [config.arcRpc] } },
 } as const;
 
@@ -15,13 +13,8 @@ export const arcClient = createPublicClient({
   transport: http(config.arcRpc),
 });
 
-export const baseClient = createPublicClient({
-  chain: baseSepolia,
-  transport: http(config.baseRpc),
-});
-
-// ABI fragments used by MCP tools
-export const ERC20ReadAbi = [
+// ── ERC-20 ──
+export const ERC20Abi = [
   {
     type: "function", name: "balanceOf",
     inputs: [{ name: "account", type: "address" }],
@@ -34,61 +27,184 @@ export const ERC20ReadAbi = [
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
   },
+  {
+    type: "function", name: "transfer",
+    inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "approve",
+    inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+  },
 ] as const;
 
-export const IntentVaultReadAbi = [
+// ── ERC-8004: Agent Identity ──
+export const IdentityRegistryAbi = [
   {
-    type: "function", name: "nonces",
-    inputs: [{ name: "maker", type: "address" }],
-    outputs: [{ name: "", type: "uint64" }],
+    type: "function", name: "register",
+    inputs: [{ name: "metadataURI", type: "string" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "ownerOf",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
     stateMutability: "view",
   },
   {
-    type: "function", name: "intentStates",
-    inputs: [{ name: "intentId", type: "bytes32" }],
+    type: "function", name: "tokenURI",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }],
+    stateMutability: "view",
+  },
+] as const;
+
+export const ReputationRegistryAbi = [
+  {
+    type: "function", name: "giveFeedback",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "score", type: "int128" },
+      { name: "feedbackType", type: "uint8" },
+      { name: "tag", type: "string" },
+      { name: "metadataURI", type: "string" },
+      { name: "evidenceURI", type: "string" },
+      { name: "comment", type: "string" },
+      { name: "feedbackHash", type: "bytes32" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+export const ValidationRegistryAbi = [
+  {
+    type: "function", name: "validationRequest",
+    inputs: [
+      { name: "validator", type: "address" },
+      { name: "agentId", type: "uint256" },
+      { name: "requestURI", type: "string" },
+      { name: "requestHash", type: "bytes32" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "validationResponse",
+    inputs: [
+      { name: "requestHash", type: "bytes32" },
+      { name: "response", type: "uint8" },
+      { name: "responseURI", type: "string" },
+      { name: "responseHash", type: "bytes32" },
+      { name: "tag", type: "string" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "getValidationStatus",
+    inputs: [{ name: "requestHash", type: "bytes32" }],
     outputs: [{ name: "", type: "uint8" }],
     stateMutability: "view",
   },
+] as const;
+
+// ── ERC-8183: Agentic Jobs ──
+export const ERC8183Abi = [
   {
-    type: "function", name: "intents",
-    inputs: [{ name: "intentId", type: "bytes32" }],
-    outputs: [
-      { name: "maker", type: "address" },
-      { name: "recipient", type: "address" },
-      { name: "amountIn", type: "uint256" },
-      { name: "minAmountOut", type: "uint256" },
-      { name: "srcChainId", type: "uint256" },
-      { name: "dstChainId", type: "uint256" },
-      { name: "deadline", type: "uint64" },
-      { name: "nonce", type: "uint64" },
-      { name: "salt", type: "bytes32" },
+    type: "function", name: "createJob",
+    inputs: [
+      { name: "provider", type: "address" },
+      { name: "evaluator", type: "address" },
+      { name: "expiredAt", type: "uint256" },
+      { name: "description", type: "string" },
+      { name: "hook", type: "address" },
     ],
-    stateMutability: "view",
+    outputs: [],
+    stateMutability: "nonpayable",
   },
-] as const;
-
-export const ReactorReadAbi = [
   {
-    type: "function", name: "filled",
-    inputs: [{ name: "intentId", type: "bytes32" }],
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-  },
-] as const;
-
-export const ReactorV2ReadAbi = [
-  {
-    type: "function", name: "pendingFills",
-    inputs: [{ name: "intentId", type: "bytes32" }],
-    outputs: [
-      { name: "solver", type: "address" },
-      { name: "recipient", type: "address" },
+    type: "function", name: "setBudget",
+    inputs: [
+      { name: "jobId", type: "uint256" },
       { name: "amount", type: "uint256" },
-      { name: "bond", type: "uint256" },
-      { name: "challengeEnd", type: "uint64" },
-      { name: "finalized", type: "bool" },
-      { name: "slashed", type: "bool" },
+      { name: "optParams", type: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "fund",
+    inputs: [
+      { name: "jobId", type: "uint256" },
+      { name: "optParams", type: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "submit",
+    inputs: [
+      { name: "jobId", type: "uint256" },
+      { name: "deliverable", type: "bytes32" },
+      { name: "optParams", type: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "complete",
+    inputs: [
+      { name: "jobId", type: "uint256" },
+      { name: "reason", type: "bytes32" },
+      { name: "optParams", type: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "getJob",
+    inputs: [{ name: "jobId", type: "uint256" }],
+    outputs: [
+      { name: "client", type: "address" },
+      { name: "provider", type: "address" },
+      { name: "evaluator", type: "address" },
+      { name: "status", type: "uint8" },
+      { name: "budget", type: "uint256" },
+      { name: "expiredAt", type: "uint256" },
+      { name: "description", type: "string" },
     ],
     stateMutability: "view",
+  },
+  // Event for extracting jobId
+  {
+    type: "event", name: "JobCreated",
+    inputs: [
+      { name: "jobId", type: "uint256", indexed: true },
+      { name: "client", type: "address", indexed: true },
+      { name: "provider", type: "address", indexed: true },
+      { name: "evaluator", type: "address", indexed: false },
+      { name: "expiredAt", type: "uint256", indexed: false },
+      { name: "hook", type: "address", indexed: false },
+    ],
+  },
+] as const;
+
+// ── CCTP v2 ──
+export const TokenMessengerV2Abi = [
+  {
+    type: "function", name: "depositForBurn",
+    inputs: [
+      { name: "amount", type: "uint256" },
+      { name: "destinationDomain", type: "uint32" },
+      { name: "mintRecipient", type: "bytes32" },
+      { name: "burnToken", type: "address" },
+    ],
+    outputs: [{ name: "nonce", type: "uint64" }],
+    stateMutability: "nonpayable",
   },
 ] as const;
