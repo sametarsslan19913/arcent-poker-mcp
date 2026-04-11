@@ -5,14 +5,27 @@ import { okResult, errorResult, err } from "../errors.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-export async function sendUsdcHandler(args: {
+const TOKEN_MAP: Record<string, { address: `0x${string}`; symbol: string; decimals: number }> = {
+  usdc: { address: config.usdc, symbol: "USDC", decimals: 6 },
+  eurc: { address: config.eurc, symbol: "EURC", decimals: 6 },
+};
+
+export async function sendTokenHandler(args: {
   from: string;
   to: string;
-  amountUsdc: string;
+  amount: string;
+  token?: string;
 }) {
   const from = args.from as `0x${string}`;
   const to = args.to as `0x${string}`;
-  const amount = BigInt(Math.round(parseFloat(args.amountUsdc) * 1_000_000)); // 6 decimals
+  const tokenKey = (args.token ?? "usdc").toLowerCase();
+  const tokenInfo = TOKEN_MAP[tokenKey];
+
+  if (!tokenInfo) {
+    return errorResult(err("E_UNKNOWN_TOKEN", `Unknown token: ${args.token}. Supported: USDC, EURC`));
+  }
+
+  const amount = BigInt(Math.round(parseFloat(args.amount) * 10 ** tokenInfo.decimals));
 
   if (!from || from === ZERO_ADDRESS) {
     return errorResult(err("E_INVALID_FROM", "Sender address cannot be zero"));
@@ -24,9 +37,8 @@ export async function sendUsdcHandler(args: {
     return errorResult(err("E_ZERO_AMOUNT", "Amount must be greater than zero"));
   }
 
-  // Check balance
   const balance = await arcClient.readContract({
-    address: config.usdc,
+    address: tokenInfo.address,
     abi: ERC20Abi,
     functionName: "balanceOf",
     args: [from],
@@ -34,7 +46,7 @@ export async function sendUsdcHandler(args: {
 
   if (balance < amount) {
     return errorResult(err("E_INSUFFICIENT_BALANCE",
-      `Insufficient USDC: have ${(Number(balance) / 1_000_000).toFixed(2)}, need ${args.amountUsdc}`));
+      `Insufficient ${tokenInfo.symbol}: have ${(Number(balance) / 10 ** tokenInfo.decimals).toFixed(2)}, need ${args.amount}`));
   }
 
   const data = encodeFunctionData({
@@ -45,16 +57,17 @@ export async function sendUsdcHandler(args: {
 
   return okResult({
     unsignedTx: {
-      to: config.usdc,
+      to: tokenInfo.address,
       data,
       value: "0",
       chainId: config.arcChainId,
     },
     from,
     to: args.to,
+    token: tokenInfo.symbol,
     amountRaw: amount.toString(),
-    amountUsdc: args.amountUsdc,
-    balanceAfter: ((balance - amount).toString()),
+    amount: args.amount,
+    balanceBefore: (Number(balance) / 10 ** tokenInfo.decimals).toFixed(2),
     explorerNote: "Track at https://testnet.arcscan.app",
   });
 }

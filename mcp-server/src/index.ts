@@ -9,7 +9,7 @@ import { jobSetBudgetHandler, jobFundEscrowHandler } from "./tools/job_fund.js";
 import { jobSubmitHandler } from "./tools/job_submit.js";
 import { jobCompleteHandler } from "./tools/job_complete.js";
 import { jobStatusHandler } from "./tools/job_status.js";
-import { sendUsdcHandler } from "./tools/send_usdc.js";
+import { sendTokenHandler } from "./tools/send_usdc.js";
 import { bridgeSendHandler } from "./tools/bridge_send.js";
 import { balanceHandler } from "./tools/balance.js";
 
@@ -138,14 +138,15 @@ server.tool(
 // ═══════════════════════════════════════════
 
 server.tool(
-  "send_usdc",
-  "Send USDC to another wallet on Arc Testnet. Builds an unsigned ERC-20 transfer transaction.",
+  "send_token",
+  "Send USDC or EURC to another wallet on Arc Testnet. Checks balance before building the transaction.",
   {
     from: z.string().describe("Sender wallet address"),
     to: z.string().describe("Recipient wallet address"),
-    amountUsdc: z.string().describe("Amount in USDC (e.g. '5.00')"),
+    amount: z.string().describe("Amount to send (e.g. '5.00')"),
+    token: z.enum(["USDC", "EURC"]).optional().describe("Token to send. Default: USDC"),
   },
-  async (args) => sendUsdcHandler(args),
+  async (args) => sendTokenHandler(args),
 );
 
 server.tool(
