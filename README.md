@@ -2,7 +2,7 @@
 
 > The first MCP-native toolkit for Arc's agent economy — AI agents can register identity, create jobs, escrow payments, and bridge USDC, all through natural language.
 
-**11 MCP tools** that connect Claude (and any MCP-compatible AI) to Arc Testnet's on-chain agent infrastructure: **ERC-8183** agentic jobs, **ERC-8004** agent identity, **CCTP v2** cross-chain bridge, and USDC payments.
+**13 MCP tools** that connect Claude (and any MCP-compatible AI) to Arc Testnet's on-chain agent infrastructure: **ERC-8183** agentic jobs, **ERC-8004** agent identity, **CCTP v2** cross-chain bridge, **StableFX** USDC↔EURC swap, and USDC/EURC payments.
 
 ## What Can an AI Agent Do?
 
@@ -11,8 +11,10 @@
 "Create a job for 10 USDC"              → job_create + job_fund (ERC-8183 escrow)
 "Submit the deliverable"                → job_submit (hash on-chain)
 "Approve and release payment"           → job_complete (USDC to provider)
-"Send 5 USDC to 0xABC..."              → send_usdc (ERC-20 transfer)
+"Send 5 USDC to 0xABC..."              → send_token (USDC or EURC transfer)
+"Swap 1 USDC to EURC"                   → swap (StableFX via Circle App Kit)
 "Bridge 100 USDC to Base Sepolia"       → bridge_send (CCTP v2 burn/mint)
+"Check my balance"                      → balance (USDC + EURC)
 "Check agent reputation"                → agent_reputation (on-chain scoring)
 ```
 
@@ -40,8 +42,10 @@ No frontend needed. No SDK integration. Just talk to Claude.
 ### Payments
 | Tool | What it does |
 |---|---|
-| `send_usdc` | Transfer USDC between wallets on Arc |
+| `send_token` | Transfer USDC or EURC between wallets on Arc |
+| `swap` | Swap USDC ↔ EURC via StableFX (Circle App Kit, needs Kit Key) |
 | `bridge_send` | Bridge USDC to other chains via CCTP v2 |
+| `balance` | Query USDC + EURC balance for any wallet |
 
 ## Quick Start
 
@@ -65,7 +69,8 @@ Add to your `.mcp.json` (or it's already included):
       "args": ["tsx", "mcp-server/src/index.ts"],
       "cwd": "/path/to/arcent",
       "env": {
-        "ARC_RPC": "https://rpc.testnet.arc.network"
+        "ARC_RPC": "https://rpc.testnet.arc.network",
+        "KIT_KEY": "KIT_KEY:<keyId>:<keySecret>"
       }
     }
   }
@@ -104,6 +109,8 @@ Claude Code ──MCP──> arc-agent-toolkit ──RPC──> Arc Testnet
 | ReputationRegistry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
 | ValidationRegistry | `0x8004Cb1BF31DAf7788923b405b754f57acEB4272` |
 | CCTP TokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` |
+| FxEscrow (StableFX) | `0x867650F5eAe8df91445971f14d89fd84F0C9a9f8` |
+| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 
 ## Tech Stack
 
@@ -112,6 +119,7 @@ Claude Code ──MCP──> arc-agent-toolkit ──RPC──> Arc Testnet
 - **ERC-8183** — Agentic job standard (escrow, deliverables, settlement)
 - **ERC-8004** — Agent identity & reputation (ERC-721 based)
 - **CCTP v2** — Circle's cross-chain transfer protocol
+- **App Kit** — Circle's `@circle-fin/swap-kit` for StableFX USDC↔EURC swap
 
 ## Resources
 

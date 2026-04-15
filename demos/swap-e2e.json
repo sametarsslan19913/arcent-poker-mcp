@@ -1,0 +1,32 @@
+{
+  "title": "Arc Agent Toolkit — Swap Tool E2E (USDC → EURC)",
+  "date": "2026-04-15",
+  "network": "Arc Testnet (chainId: 5042002)",
+  "wallet": "0x4654003D6dc68b60EDd04F50AC91000aF44863B9",
+  "sdk": "@circle-fin/swap-kit v1.1.0",
+  "adapter": "@circle-fin/adapter-viem-v2",
+  "auth": "Kit Key from Circle Console (network-agnostic)",
+  "result": "success",
+  "trade": {
+    "tokenIn": "USDC",
+    "tokenOut": "EURC",
+    "amountIn": "0.50",
+    "amountOut": "0.403853",
+    "impliedRate": "0.807706 EUR/USD",
+    "slippageBps": 300
+  },
+  "balances": {
+    "before": { "usdc": "2.822773", "eurc": "0" },
+    "after":  { "usdc": "2.309405", "eurc": "0.403853" },
+    "deltaUsdc": "-0.513368 (0.50 swap + 0.013368 gas)",
+    "deltaEurc": "+0.403853"
+  },
+  "tx": "0xd356b1edf1acb1149cdd4356952c9cfc4b0022fbcac31fcb29e942e9e9b3bc48",
+  "explorer": "https://testnet.arcscan.app/tx/0xd356b1edf1acb1149cdd4356952c9cfc4b0022fbcac31fcb29e942e9e9b3bc48",
+  "contracts": {
+    "USDC": "0x3600000000000000000000000000000000000000",
+    "EURC": "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+    "FxEscrow": "0x867650F5eAe8df91445971f14d89fd84F0C9a9f8",
+    "Permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+  }
+}

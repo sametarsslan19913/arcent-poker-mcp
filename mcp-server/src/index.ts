@@ -12,6 +12,7 @@ import { jobStatusHandler } from "./tools/job_status.js";
 import { sendTokenHandler } from "./tools/send_usdc.js";
 import { bridgeSendHandler } from "./tools/bridge_send.js";
 import { balanceHandler } from "./tools/balance.js";
+import { swapHandler } from "./tools/swap.js";
 
 const server = new McpServer({
   name: "arc-agent-toolkit",
@@ -170,10 +171,23 @@ server.tool(
   async (args) => balanceHandler(args),
 );
 
+server.tool(
+  "swap",
+  "Swap between USDC and EURC on Arc Testnet using Circle App Kit. Executes the swap on-chain and returns the tx hash.",
+  {
+    privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Signs the swap tx."),
+    tokenIn: z.enum(["USDC", "EURC"]).describe("Token to swap from"),
+    tokenOut: z.enum(["USDC", "EURC"]).describe("Token to swap to"),
+    amountIn: z.string().describe("Amount to swap (e.g. '1.00')"),
+    slippageBps: z.number().optional().describe("Max slippage in basis points. Default: 300 (3%)"),
+  },
+  async (args) => swapHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
 process.stderr.write("arc-agent-toolkit MCP server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arc-agent-toolkit MCP server connected. 12 tools registered.\n");
+process.stderr.write("arc-agent-toolkit MCP server connected. 13 tools registered.\n");

@@ -8,6 +8,12 @@ wallets.json
 *privatekey*
 *private_key*
 
+# Claude Code local state
+.claude/
+
+# MCP config may contain secrets (KIT_KEY etc.) — use .mcp.json.example as template
+.mcp.json
+
 # Node
 node_modules/
 npm-debug.log*
