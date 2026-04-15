@@ -9,7 +9,7 @@ import { jobSetBudgetHandler, jobFundEscrowHandler } from "./tools/job_fund.js";
 import { jobSubmitHandler } from "./tools/job_submit.js";
 import { jobCompleteHandler } from "./tools/job_complete.js";
 import { jobStatusHandler } from "./tools/job_status.js";
-import { sendTokenHandler } from "./tools/send_usdc.js";
+import { sendTokenHandler } from "./tools/send_token.js";
 import { bridgeSendHandler } from "./tools/bridge_send.js";
 import { balanceHandler } from "./tools/balance.js";
 import { swapHandler } from "./tools/swap.js";
@@ -140,24 +140,26 @@ server.tool(
 
 server.tool(
   "send_token",
-  "Send USDC or EURC to another wallet on Arc Testnet. Checks balance before building the transaction.",
+  "Send USDC, EURC, or USDT on-chain using Circle App Kit. Supports Arc Testnet + other EVM testnets.",
   {
-    from: z.string().describe("Sender wallet address"),
+    privateKey: z.string().describe("Sender wallet private key (0x-prefixed, 32 bytes). Signs the transfer."),
     to: z.string().describe("Recipient wallet address"),
     amount: z.string().describe("Amount to send (e.g. '5.00')"),
-    token: z.enum(["USDC", "EURC"]).optional().describe("Token to send. Default: USDC"),
+    token: z.enum(["USDC", "EURC", "USDT"]).optional().describe("Token to send. Default: USDC"),
+    chain: z.string().optional().describe("Source chain. Default: Arc_Testnet. Also supports Ethereum_Sepolia, Base_Sepolia, Arbitrum_Sepolia, Avalanche_Fuji, Polygon_Amoy, Optimism_Sepolia"),
   },
   async (args) => sendTokenHandler(args),
 );
 
 server.tool(
   "bridge_send",
-  "Bridge USDC from Arc to another chain via CCTP v2. Burns USDC on Arc, mints on destination.",
+  "Bridge USDC across chains via Circle App Kit Bridge Kit (CCTP v2). Works in both directions: Arc ↔ other EVM chains.",
   {
-    from: z.string().describe("Sender wallet on Arc"),
+    privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Signs both approve + burn."),
     amountUsdc: z.string().describe("Amount in USDC (e.g. '10.00')"),
-    destinationChain: z.string().describe("Destination chain name: ethereum_sepolia, base_sepolia, arbitrum_sepolia, avalanche_fuji, polygon_amoy"),
-    recipient: z.string().describe("Recipient address on destination chain"),
+    fromChain: z.string().optional().describe("Source chain. Default: Arc_Testnet"),
+    toChain: z.string().describe("Destination chain: Arc_Testnet, Ethereum_Sepolia, Base_Sepolia, Arbitrum_Sepolia, Avalanche_Fuji, Polygon_Amoy, Optimism_Sepolia, Unichain_Sepolia"),
+    speed: z.enum(["FAST", "SLOW"]).optional().describe("Transfer speed. FAST uses standard CCTP v2, SLOW is cheaper. Default: FAST"),
   },
   async (args) => bridgeSendHandler(args),
 );

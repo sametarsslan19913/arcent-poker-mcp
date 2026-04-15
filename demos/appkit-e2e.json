@@ -1,0 +1,49 @@
+{
+  "title": "Arc Agent Toolkit — App Kit Refactor E2E (send + bridge)",
+  "date": "2026-04-15",
+  "network": "Arc Testnet (chainId: 5042002)",
+  "wallet": "0x4654003D6dc68b60EDd04F50AC91000aF44863B9",
+  "sdk": "@circle-fin/app-kit v1.x",
+  "adapter": "@circle-fin/adapter-viem-v2",
+  "auth": "Kit Key from Circle Console (network-agnostic)",
+  "scope": "3 of 13 MCP tools (swap, send_token, bridge_send) migrated from direct contracts to Circle App Kit",
+  "operations": [
+    {
+      "tool": "send_token",
+      "type": "same-chain transfer",
+      "sdk_method": "AppKit.send()",
+      "params": { "chain": "Arc_Testnet", "token": "USDC", "amount": "0.01", "to": "0x000000000000000000000000000000000000dEaD" },
+      "result": "success",
+      "tx": "0xd8ba719bf7622d2041f940082ab6462c01359455059082ff7856390ffe9188e0",
+      "explorer": "https://testnet.arcscan.app/tx/0xd8ba719bf7622d2041f940082ab6462c01359455059082ff7856390ffe9188e0"
+    },
+    {
+      "tool": "bridge_send",
+      "type": "cross-chain CCTP v2 bridge",
+      "sdk_method": "AppKit.bridge()",
+      "params": { "fromChain": "Arc_Testnet", "toChain": "Base_Sepolia", "amount": "0.05", "token": "USDC", "speed": "FAST" },
+      "result": "success",
+      "elapsed_seconds": 14.6,
+      "steps": [
+        { "name": "approve", "chain": "Arc_Testnet", "tx": "0xdc88079ad6d9eadac0beb34ffd3f2084aec46ba064db59d1ff80a73b3b536e5c" },
+        { "name": "burn", "chain": "Arc_Testnet", "tx": "0x42abed0cba400bfe1c6922b6549ca2246a5ff289938fd95c5efa72c1ecefa364" },
+        { "name": "fetchAttestation", "chain": "off-chain" },
+        { "name": "mint", "chain": "Base_Sepolia", "tx": "0xc88dbe9bcaa7c2a2eea7f456b61db29bf45e0886a58e3c005c535c16eb3189c8" }
+      ]
+    },
+    {
+      "tool": "swap",
+      "type": "same-chain USDC↔EURC (StableFX)",
+      "sdk_method": "SwapKit.swap()",
+      "params": { "chain": "Arc_Testnet", "tokenIn": "USDC", "tokenOut": "EURC", "amount": "0.50" },
+      "result": "success (verified earlier session)",
+      "tx": "0xd356b1edf1acb1149cdd4356952c9cfc4b0022fbcac31fcb29e942e9e9b3bc48",
+      "artifact": "demos/swap-e2e.json"
+    }
+  ],
+  "positioning": {
+    "claim": "First MCP-native toolkit wrapping all three Arc App Kits (Bridge + Swap + Send) with ERC-8004 + ERC-8183 agent standards",
+    "circle_mcp_comparison": "Circle MCP = code generation (IDE autocomplete). Arc Agent Toolkit = runtime execution (real on-chain tx).",
+    "nanopayments_status": "deferred — x402 coinbase package doesn't list Arc network yet; Circle Gateway REST endpoint (gateway-api-testnet.circle.com/gateway/v1/x402/settle) available but requires Gateway Wallet pre-deposit + mock seller endpoint for live E2E test"
+  }
+}

@@ -1,8 +1,12 @@
 # Arc Agent Toolkit
 
-> The first MCP-native toolkit for Arc's agent economy — AI agents can register identity, create jobs, escrow payments, and bridge USDC, all through natural language.
+> The first MCP-native toolkit wrapping all three Arc App Kits (Bridge + Swap + Send) with ERC-8004 + ERC-8183 agent standards — AI agents execute on-chain Arc actions via natural language.
 
-**13 MCP tools** that connect Claude (and any MCP-compatible AI) to Arc Testnet's on-chain agent infrastructure: **ERC-8183** agentic jobs, **ERC-8004** agent identity, **CCTP v2** cross-chain bridge, **StableFX** USDC↔EURC swap, and USDC/EURC payments.
+**13 MCP tools** that connect Claude, Cursor, and ChatGPT (any MCP-compatible AI) to Arc Testnet's on-chain agent infrastructure:
+- **Arc App Kits** — official Circle SDKs for Bridge (CCTP v2), Swap (StableFX), Send (ERC-20)
+- **ERC-8183** — agentic job escrow & settlement
+- **ERC-8004** — agent identity & reputation
+- **Multi-chain** — send/bridge across Arc, Ethereum, Base, Arbitrum, Avalanche, Polygon, Optimism testnets
 
 ## What Can an AI Agent Do?
 
@@ -39,13 +43,13 @@ No frontend needed. No SDK integration. Just talk to Claude.
 | `job_complete` | Evaluator approves, USDC released to provider |
 | `job_status` | Query job state, parties, budget |
 
-### Payments
-| Tool | What it does |
-|---|---|
-| `send_token` | Transfer USDC or EURC between wallets on Arc |
-| `swap` | Swap USDC ↔ EURC via StableFX (Circle App Kit, needs Kit Key) |
-| `bridge_send` | Bridge USDC to other chains via CCTP v2 |
-| `balance` | Query USDC + EURC balance for any wallet |
+### Payments (Circle App Kit wrapped)
+| Tool | What it does | SDK |
+|---|---|---|
+| `send_token` | Transfer USDC / EURC / USDT on Arc or other EVM testnets | `AppKit.send()` |
+| `swap` | Swap USDC ↔ EURC via StableFX on Arc | `SwapKit.swap()` |
+| `bridge_send` | Bridge USDC across chains via CCTP v2 (both directions) | `AppKit.bridge()` |
+| `balance` | Query USDC + EURC balance for any Arc wallet | direct RPC |
 
 ## Quick Start
 
