@@ -59,8 +59,7 @@ for (const ep of endpoints) {
     console.log(`  ✓ Paid ${ep.price} USDC — total calls: ${callCount}, collected: ${totalCollected.toFixed(6)} USDC`);
     res.json(ep.handler(req));
   };
-  // @ts-expect-error — method is dynamic string
-  app[method](ep.path, gateway.require(`$${ep.price}`), handler);
+  (app as unknown as Record<string, (...a: unknown[]) => void>)[method](ep.path, gateway.require(`$${ep.price}`), handler);
 }
 
 app.get("/stats", (_req: Request, res: Response) => {

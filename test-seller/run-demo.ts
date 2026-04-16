@@ -65,7 +65,7 @@ async function main() {
     process.exit(1);
   }
 
-  const g = new GatewayClient({ chain: NETWORK, privateKey: BUYER_KEY });
+  const g = new GatewayClient({ chain: NETWORK, privateKey: BUYER_KEY! });
 
   stage(1, "Buyer balances");
   const before = await g.getBalances();

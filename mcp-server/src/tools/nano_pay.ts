@@ -3,11 +3,36 @@ import { okResult, errorResult, err } from "../errors.js";
 
 const PAY_TIMEOUT_MS = 30_000;
 
+// NOTE on defense-in-depth:
+//  - DNS rebinding (evil.com -> 169.254.169.254 at resolve time) is NOT closed
+//    here; the SDK does not expose a custom DNS resolver. Callers routing nano_pay
+//    through untrusted inputs should use a dedicated network namespace or firewall.
+//  - Promise.race timeout below does not abort the in-flight pay() — the SDK does
+//    not accept an AbortSignal. The caller's process continues, the HTTP request
+//    may complete in the background. Acceptable for a user-driven MCP tool.
 function isBlockedHost(hostname: string): string | null {
   const h = hostname.toLowerCase();
   if (h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "::1") return "loopback";
   if (h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".localhost")) return "local-suffix";
-  // IPv4 literal checks
+
+  // IPv6 private / link-local
+  if (/^f[cd][0-9a-f]{2}:/.test(h)) return "rfc4193-ula";
+  if (h.startsWith("fe80:")) return "link-local-v6";
+  if (h.startsWith("::ffff:")) {
+    const v4 = h.slice(7);
+    const sub = isBlockedHost(v4);
+    if (sub) return `v4-mapped-${sub}`;
+  }
+
+  // IPv4 non-dotted numeric formats (decimal, octal, hex) — normalize to dotted
+  const numeric = parseNumericIPv4(h);
+  if (numeric !== null) {
+    const sub = isBlockedHost(numeric);
+    if (sub) return `numeric-${sub}`;
+    return "numeric-ipv4";
+  }
+
+  // IPv4 dotted literal
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {
     const [a, b] = m.slice(1).map(Number);
@@ -20,6 +45,29 @@ function isBlockedHost(hostname: string): string | null {
     if (a >= 224) return "multicast-reserved";
   }
   return null;
+}
+
+function parseNumericIPv4(h: string): string | null {
+  // Decimal single integer (0 - 4294967295): e.g. 2130706433 = 127.0.0.1
+  if (/^\d+$/.test(h)) {
+    const n = Number(h);
+    if (Number.isFinite(n) && n >= 0 && n <= 0xFFFFFFFF) return intToIPv4(n);
+  }
+  // Hex literal: 0x7f000001 = 127.0.0.1
+  if (/^0x[0-9a-f]+$/i.test(h)) {
+    const n = parseInt(h, 16);
+    if (Number.isFinite(n) && n >= 0 && n <= 0xFFFFFFFF) return intToIPv4(n);
+  }
+  // Octal-leading form: 0177.0.0.1 — partial; Node URL.hostname usually strips, but cover anyway
+  if (/^0[0-7]+$/.test(h)) {
+    const n = parseInt(h, 8);
+    if (Number.isFinite(n) && n >= 0 && n <= 0xFFFFFFFF) return intToIPv4(n);
+  }
+  return null;
+}
+
+function intToIPv4(n: number): string {
+  return [(n >>> 24) & 0xFF, (n >>> 16) & 0xFF, (n >>> 8) & 0xFF, n & 0xFF].join(".");
 }
 
 export async function nanoPayHandler(args: {
