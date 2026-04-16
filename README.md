@@ -291,6 +291,23 @@ The pivot came after reading Arc's adoption of two emerging Ethereum standards �
 
 Old custom-bridge code is preserved at git tag `v1.0-custom-bridge` for reference.
 
+### Repository Layout — Current vs Archive
+
+| Directory | Status | Purpose |
+|---|---|---|
+| `mcp-server/` | **Current** | The 17 MCP tools (the submission) |
+| `test-seller/` | **Current** | Circle reference seller clone + stress-test scripts (nano_pay E2E) |
+| `submission/` | **Current** | Video agent brief + submission handoff files |
+| `demos/` | **Current** | E2E artifacts (nano-1k-stress, nano-probes, safety-e2e, appkit-e2e, swap-e2e) |
+| `research/` | **Current** | Brief documents for submission materials + hackathon research |
+| `contracts/` | **Archive** (v1.0-custom-bridge) | Custom bridge Solidity — IntentVault, SettlementReactorV2/V3, ArcBlockOracle |
+| `relayer/` | **Archive** (v1.0-custom-bridge) | Custom bridge event listener + executor |
+| `example-agent/` | **Archive** (v1.0-custom-bridge) | Early autonomous agent loop using the custom bridge |
+| `zk-prover/` | **Archive** (v1.0-custom-bridge) | SP1 ZK storage proof prover for the custom bridge |
+| `docs/` | **Archive** | Earlier design docs (WHITEPAPER, SPEC, mcp-sdk-research) |
+
+The archive directories are not part of the MCP toolkit submission — they are preserved on master (and more completely at git tag `v1.0-custom-bridge`) for transparency about the project's evolution.
+
 ---
 
 ## Hackathon

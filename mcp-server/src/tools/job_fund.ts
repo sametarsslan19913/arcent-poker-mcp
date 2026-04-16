@@ -44,16 +44,21 @@ export async function jobFundEscrowHandler(args: {
   const client = args.client as `0x${string}`;
   const jobId = BigInt(args.jobId);
 
-  // Read job to get budget amount
+  // Read job to get budget amount. viem returns a tuple matching ABI output order:
+  // [id, client, provider, evaluator, description, budget, expiredAt, status, hook]
   let budget: bigint;
   try {
-    const job = await arcClient.readContract({
+    const job = (await arcClient.readContract({
       address: config.erc8183,
       abi: ERC8183Abi,
       functionName: "getJob",
       args: [jobId],
-    });
-    budget = (job as any)[4] as bigint; // budget field (index 4)
+    })) as readonly unknown[];
+    const budgetRaw = job[5];
+    if (typeof budgetRaw !== "bigint") {
+      return errorResult(err("E_JOB_READ_FAILED", "Job budget field was not bigint at tuple[5] — ABI mismatch?"));
+    }
+    budget = budgetRaw;
   } catch {
     return errorResult(err("E_JOB_NOT_FOUND", `Could not read job ${args.jobId}`));
   }
