@@ -8,11 +8,15 @@ import { jobCreateHandler } from "./tools/job_create.js";
 import { jobSetBudgetHandler, jobFundEscrowHandler } from "./tools/job_fund.js";
 import { jobSubmitHandler } from "./tools/job_submit.js";
 import { jobCompleteHandler } from "./tools/job_complete.js";
+import { jobRejectHandler } from "./tools/job_reject.js";
+import { jobClaimRefundHandler } from "./tools/job_claim_refund.js";
 import { jobStatusHandler } from "./tools/job_status.js";
 import { sendTokenHandler } from "./tools/send_token.js";
 import { bridgeSendHandler } from "./tools/bridge_send.js";
 import { balanceHandler } from "./tools/balance.js";
 import { swapHandler } from "./tools/swap.js";
+import { nanoDepositHandler } from "./tools/nano_deposit.js";
+import { nanoPayHandler } from "./tools/nano_pay.js";
 
 const server = new McpServer({
   name: "arc-agent-toolkit",
@@ -126,6 +130,27 @@ server.tool(
 );
 
 server.tool(
+  "job_reject",
+  "Reject a job's deliverable (ERC-8183). Evaluator rejects substandard work. Job transitions to Rejected state and the contract AUTOMATICALLY refunds escrowed USDC to the client (no separate claimRefund call needed). Verified on Arc testnet: reject tx returns escrow to client wallet within the same block.",
+  {
+    evaluator: z.string().describe("Evaluator wallet (must match job's evaluator)"),
+    jobId: z.string().describe("Job ID"),
+    reason: z.string().optional().describe("Rejection reason (will be hashed). Default: 'rejected: deliverable does not meet criteria'"),
+  },
+  async (args) => jobRejectHandler(args),
+);
+
+server.tool(
+  "job_claim_refund",
+  "Reclaim escrowed USDC from an EXPIRED job (ERC-8183). Use only when a job passed its expiredAt deadline and funds are still locked. Bypasses hooks per EIP-8183 spec — guaranteed recovery path after expiry. For Rejected jobs, refund is automatic via job_reject (no need to call this).",
+  {
+    client: z.string().describe("Client wallet (must match job's client)"),
+    jobId: z.string().describe("Job ID (must be in Expired state)"),
+  },
+  async (args) => jobClaimRefundHandler(args),
+);
+
+server.tool(
   "job_status",
   "Check the status of an agentic job (ERC-8183). Returns parties, budget, status, and deadline.",
   {
@@ -146,7 +171,7 @@ server.tool(
     to: z.string().describe("Recipient wallet address"),
     amount: z.string().describe("Amount to send (e.g. '5.00')"),
     token: z.enum(["USDC", "EURC", "USDT"]).optional().describe("Token to send. Default: USDC"),
-    chain: z.string().optional().describe("Source chain. Default: Arc_Testnet. Also supports Ethereum_Sepolia, Base_Sepolia, Arbitrum_Sepolia, Avalanche_Fuji, Polygon_Amoy, Optimism_Sepolia"),
+    chain: z.string().optional().describe("Source chain. Default: Arc_Testnet. Also supports Ethereum_Sepolia, Base_Sepolia, Arbitrum_Sepolia, Avalanche_Fuji, Optimism_Sepolia"),
   },
   async (args) => sendTokenHandler(args),
 );
@@ -158,7 +183,7 @@ server.tool(
     privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Signs both approve + burn."),
     amountUsdc: z.string().describe("Amount in USDC (e.g. '10.00')"),
     fromChain: z.string().optional().describe("Source chain. Default: Arc_Testnet"),
-    toChain: z.string().describe("Destination chain: Arc_Testnet, Ethereum_Sepolia, Base_Sepolia, Arbitrum_Sepolia, Avalanche_Fuji, Polygon_Amoy, Optimism_Sepolia, Unichain_Sepolia"),
+    toChain: z.string().describe("Destination chain: Arc_Testnet, Ethereum_Sepolia, Base_Sepolia, Arbitrum_Sepolia, Avalanche_Fuji, Optimism_Sepolia, Unichain_Sepolia"),
     speed: z.enum(["FAST", "SLOW"]).optional().describe("Transfer speed. FAST uses standard CCTP v2, SLOW is cheaper. Default: FAST"),
   },
   async (args) => bridgeSendHandler(args),
@@ -186,10 +211,38 @@ server.tool(
   async (args) => swapHandler(args),
 );
 
+// ═══════════════════════════════════════════
+// Nanopayments (Circle Gateway + x402)
+// ═══════════════════════════════════════════
+
+server.tool(
+  "nano_deposit",
+  "Deposit USDC into Circle Gateway Wallet for gasless x402 nanopayments. After this one-time gas cost, all subsequent nano_pay calls settle off-chain (batched).",
+  {
+    privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Signs the deposit tx."),
+    amountUsdc: z.string().describe("USDC amount to deposit (e.g. '1.00'). This is one-time funding for the Gateway buffer."),
+    chain: z.string().optional().describe("Chain name. Default: arcTestnet. Other supported testnets: baseSepolia, ethereumSepolia, arbitrumSepolia, avalancheFuji, optimismSepolia, polygonAmoy, etc."),
+  },
+  async (args) => nanoDepositHandler(args),
+);
+
+server.tool(
+  "nano_pay",
+  "Pay an x402-protected resource using Circle Gateway nanopayments. Handles 402 challenge automatically: parses requirements, signs EIP-3009 authorization, retries with X-Payment header. Gasless and sub-cent.",
+  {
+    privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Must have prior nano_deposit balance."),
+    url: z.string().describe("URL of the x402-paywalled resource (full http(s) URL)"),
+    method: z.enum(["GET", "POST", "PUT", "DELETE"]).optional().describe("HTTP method. Default: GET"),
+    body: z.any().optional().describe("Request body (for POST/PUT)"),
+    chain: z.string().optional().describe("Chain name. Default: arcTestnet"),
+  },
+  async (args) => nanoPayHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
 process.stderr.write("arc-agent-toolkit MCP server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arc-agent-toolkit MCP server connected. 13 tools registered.\n");
+process.stderr.write("arc-agent-toolkit MCP server connected. 17 tools registered.\n");

@@ -8,7 +8,6 @@ const SUPPORTED_CHAINS = [
   "Base_Sepolia",
   "Arbitrum_Sepolia",
   "Avalanche_Fuji",
-  "Polygon_Amoy",
   "Optimism_Sepolia",
   "Unichain_Sepolia",
 ] as const;

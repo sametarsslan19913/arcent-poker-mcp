@@ -1,0 +1,42 @@
+import { GatewayClient, type SupportedChainName } from "@circle-fin/x402-batching/client";
+import { okResult, errorResult, err } from "../errors.js";
+
+export async function nanoDepositHandler(args: {
+  privateKey: string;
+  amountUsdc: string;
+  chain?: string;
+}) {
+  const pk = args.privateKey as `0x${string}`;
+  if (!pk || !pk.startsWith("0x") || pk.length !== 66) {
+    return errorResult(err("E_INVALID_PK", "privateKey must be a valid 0x-prefixed 32-byte hex string"));
+  }
+
+  const amount = parseFloat(args.amountUsdc);
+  if (isNaN(amount) || amount <= 0) {
+    return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a positive number"));
+  }
+
+  const chain = (args.chain ?? "arcTestnet") as SupportedChainName;
+
+  try {
+    const gateway = new GatewayClient({ chain, privateKey: pk });
+    const result = await gateway.deposit(args.amountUsdc);
+    const balances = await gateway.getBalances();
+
+    return okResult({
+      status: "deposited",
+      depositTxHash: result.depositTxHash,
+      approvalTxHash: result.approvalTxHash ?? null,
+      depositedAmount: result.formattedAmount,
+      depositor: result.depositor,
+      gatewayAvailable: balances.gateway.formattedAvailable,
+      walletUsdcBalance: balances.wallet.formatted,
+      chain,
+      explorer: `https://testnet.arcscan.app/tx/${result.depositTxHash}`,
+      note: "USDC deposited to Circle Gateway. From now on payments are gasless off-chain transfers via nano_pay. Only this deposit cost gas.",
+    });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return errorResult(err("E_DEPOSIT_FAILED", `Gateway deposit failed: ${message}`));
+  }
+}

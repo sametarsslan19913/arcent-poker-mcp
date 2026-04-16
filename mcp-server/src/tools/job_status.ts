@@ -22,23 +22,25 @@ export async function jobStatusHandler(args: { jobId: string }) {
       args: [jobId],
     });
 
-    const result = job as any;
-    const statusCode = Number(result[3]);
+    const result = job as unknown as unknown[];
+    const statusCode = Number(result[7]);
 
     return okResult({
-      jobId: jobId.toString(),
-      client: result[0],
-      provider: result[1],
-      evaluator: result[2],
+      jobId: (result[0] as bigint).toString(),
+      client: result[1] as string,
+      provider: result[2] as string,
+      evaluator: result[3] as string,
+      description: result[4] as string,
+      budget: (result[5] as bigint).toString(),
+      budgetUsdc: (Number(result[5]) / 1_000_000).toFixed(6),
+      expiredAt: (result[6] as bigint).toString(),
       status: statusCode,
       statusLabel: STATUS_LABELS[statusCode] ?? `Unknown(${statusCode})`,
-      budget: result[4].toString(),
-      budgetUsdc: (Number(result[4]) / 1_000_000).toFixed(2),
-      expiredAt: result[5].toString(),
-      description: result[6],
+      hook: result[8] as string,
       explorerUrl: `https://testnet.arcscan.app/address/${config.erc8183}`,
     });
-  } catch {
-    return errorResult(err("E_JOB_NOT_FOUND", `Job ${args.jobId} not found or contract call failed`));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return errorResult(err("E_JOB_READ_FAILED", `Failed to read job ${args.jobId}: ${message}`));
   }
 }

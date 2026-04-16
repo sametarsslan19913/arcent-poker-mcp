@@ -11,7 +11,6 @@ const SUPPORTED_CHAINS = [
   "Base_Sepolia",
   "Arbitrum_Sepolia",
   "Avalanche_Fuji",
-  "Polygon_Amoy",
   "Optimism_Sepolia",
 ] as const;
 type SupportedChain = (typeof SUPPORTED_CHAINS)[number];
