@@ -58,3 +58,6 @@ pids/
 # Test coverage
 coverage/
 *.lcov
+
+# External reference repos (cloned locally, not part of our codebase)
+research/external-repos/

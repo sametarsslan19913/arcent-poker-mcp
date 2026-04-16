@@ -1,0 +1,30 @@
+{
+  "title": "Arcent ERC-8183 Safety E2E — reject auto-refunds escrow",
+  "network": "arcTestnet",
+  "chainId": 5042002,
+  "wallet": "0x29C2F998B325053F2e81532b5e3a44dac7A84978",
+  "jobId": "3436",
+  "budgetUsdc": "0.10",
+  "balanceBefore": "17.994221",
+  "balanceAfterFund": "17.884838",
+  "balanceAfterReject": "18.000060",
+  "escrowRefunded": true,
+  "refundMechanism": "reject() auto-refunds — no separate claimRefund needed for Rejected state",
+  "claimRefundForRejected": "reverts (0x8e78f0cb custom error) — by design, claimRefund is only for Expired state",
+  "note": "EIP-8183 spec: 'claimRefund operation intentionally bypasses hooks to ensure guaranteed recovery path after expiry'. Reject handles refund internally.",
+  "txHashes": {
+    "createJob": "0xb700ed692e50f33d48ec830fe7275ace97de94b79970e572257245c9ed31d465",
+    "setBudget": "0x339153bb3fb0722b2ccf817a9907281342adff9c0a68229ad51cf299e44426dd",
+    "approve": "0xd4277008d9e03cc573de90dbac547612b64d0e8753b90ebe7c432fbc2b2b6236",
+    "fund": "0x2191de986cc7cdb80b6d60179bc5ccc201eb2b0833cf5434c3a5de903e7f1bc4",
+    "submit": "0xdb83d0b5d33d465a69af2c7ff013252a2671ce6f4067e08442e5c0a56f389e1c",
+    "reject": "0xb22915eeafe700672ef98c2d6073086e2df0d12d81754e0a4a1ca44403d1aff4",
+    "claimRefund": "reverted (expected — Rejected auto-refunds)"
+  },
+  "bugsCaughtPrePush": [
+    "getJob ABI was wrong (7 fields → 9 fields per EIP-8183 spec). job_status tool was silently returning error. Fixed.",
+    "claimRefund reverts on Rejected state — reject() auto-refunds. Tool description updated.",
+    "job_status tuple indices corrected (status was at index 3, actually at index 7)."
+  ],
+  "timestamp": "2026-04-16T00:50:00.000Z"
+}

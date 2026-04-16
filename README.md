@@ -1,69 +1,186 @@
-# Arc Agent Toolkit
+# Arcent Agent MCP
 
-> The first MCP-native toolkit wrapping all three Arc App Kits (Bridge + Swap + Send) with ERC-8004 + ERC-8183 agent standards — AI agents execute on-chain Arc actions via natural language.
+> **An MCP-native toolkit that turns AI agents into first-class participants in Arc's agent economy.** ERC-8004 identity, ERC-8183 jobs, Circle Nanopayments, CCTP bridge, StableFX swap — **17 tools in one server**.
 
-**13 MCP tools** that connect Claude, Cursor, and ChatGPT (any MCP-compatible AI) to Arc Testnet's on-chain agent infrastructure:
-- **Arc App Kits** — official Circle SDKs for Bridge (CCTP v2), Swap (StableFX), Send (ERC-20)
-- **ERC-8183** — agentic job escrow & settlement
-- **ERC-8004** — agent identity & reputation
-- **Multi-chain** — send/bridge across Arc, Ethereum, Base, Arbitrum, Avalanche, Polygon, Optimism testnets
+> **Note:** **Not affiliated with [cutepawss/arcent](https://github.com/cutepawss/arcent) (x402 gateway) or U.S. Army Central.** Arcent Agent MCP is a separate project — the first MCP-native toolkit for Arc's agent economy.
 
-## What Can an AI Agent Do?
+> Built for the **[Agentic Economy on Arc Hackathon](https://lablab.ai/ai-hackathons/nano-payments-arc)** — Track 3: Data Services.
+
+---
+
+## What Is This?
+
+AI agents (Claude, Cursor, ChatGPT) can think but they can't act on a blockchain — no wallet, no contract calls, no payment rails. We wrap **Arc's agent economy infrastructure** in 17 MCP tools so any AI client can:
+
+- **Have an identity** on-chain (ERC-8004 NFT)
+- **Hire other agents** with escrow-protected jobs (ERC-8183)
+- **Pay sub-cent prices** for paywalled APIs (Circle Nanopayments + x402)
+- **Move USDC across chains** (CCTP v2)
+- **Swap USDC ↔ EURC** (Circle StableFX)
+
+Just talk to your AI:
 
 ```
-"Register my agent on Arc"              → agent_register (ERC-8004 identity NFT)
-"Create a job for 10 USDC"              → job_create + job_fund (ERC-8183 escrow)
-"Submit the deliverable"                → job_submit (hash on-chain)
-"Approve and release payment"           → job_complete (USDC to provider)
-"Send 5 USDC to 0xABC..."              → send_token (USDC or EURC transfer)
-"Swap 1 USDC to EURC"                   → swap (StableFX via Circle App Kit)
-"Bridge 100 USDC to Base Sepolia"       → bridge_send (CCTP v2 burn/mint)
-"Check my balance"                      → balance (USDC + EURC)
-"Check agent reputation"                → agent_reputation (on-chain scoring)
+"Register my agent on Arc"                         → agent_register
+"Create a job, 10 USDC, escrowed"                  → job_create + job_fund
+"Reject this submission, refund my escrow"         → job_reject + job_claim_refund
+"Deposit 1 USDC into Gateway, then pay this API"   → nano_deposit + nano_pay
+"Bridge 100 USDC to Base Sepolia"                  → bridge_send
+"Swap 5 USDC to EURC"                              → swap
 ```
 
-No frontend needed. No SDK integration. Just talk to Claude.
+No frontend. No SDK glue. Just Claude Desktop config + your private key.
 
-## Tools
+---
 
-### Agent Identity (ERC-8004)
-| Tool | What it does |
+## The 17 Tools
+
+### Agent Identity — ERC-8004 (3)
+
+| Tool | Purpose |
 |---|---|
 | `agent_register` | Mint an ERC-721 identity NFT for your AI agent |
 | `agent_reputation` | Give/query reputation feedback (self-rating blocked) |
 | `agent_validate` | Request/respond to validator certifications |
 
-### Agentic Jobs (ERC-8183)
-| Tool | What it does |
+### Agentic Jobs — ERC-8183 (8)
+
+| Tool | Purpose |
 |---|---|
-| `job_create` | Create a job: client, provider, evaluator, deadline |
-| `job_set_budget` | Provider sets the USDC compensation |
+| `job_create` | Open a job: client, provider, evaluator, deadline |
+| `job_set_budget` | Provider proposes USDC compensation |
 | `job_fund` | Client escrows USDC into the contract |
 | `job_submit` | Provider submits deliverable hash |
-| `job_complete` | Evaluator approves, USDC released to provider |
+| `job_complete` | Evaluator approves → USDC released |
+| `job_reject` | Evaluator rejects substandard work |
+| `job_claim_refund` | Client recovers escrow (after reject or expiry) |
 | `job_status` | Query job state, parties, budget |
 
-### Payments (Circle App Kit wrapped)
-| Tool | What it does | SDK |
+### Payments — Circle App Kit + direct (4)
+
+| Tool | Purpose | SDK |
 |---|---|---|
-| `send_token` | Transfer USDC / EURC / USDT on Arc or other EVM testnets | `AppKit.send()` |
-| `swap` | Swap USDC ↔ EURC via StableFX on Arc | `SwapKit.swap()` |
-| `bridge_send` | Bridge USDC across chains via CCTP v2 (both directions) | `AppKit.bridge()` |
-| `balance` | Query USDC + EURC balance for any Arc wallet | direct RPC |
+| `send_token` | Transfer USDC / EURC / USDT on Arc + 6 testnets | `AppKit.send()` |
+| `swap` | USDC ↔ EURC via StableFX | `SwapKit.swap()` |
+| `bridge_send` | USDC across chains via CCTP v2 (bidirectional) | `AppKit.bridge()` |
+| `balance` | USDC + EURC balance for any wallet | direct RPC |
+
+### Nanopayments — Circle Gateway + x402 (2)
+
+| Tool | Purpose | SDK |
+|---|---|---|
+| `nano_deposit` | One-time USDC deposit into Gateway Wallet | `@circle-fin/x402-batching` |
+| `nano_pay` | Pay an x402-paywalled URL (gasless, sub-cent) | `@circle-fin/x402-batching` |
+
+---
+
+## Why These Standards?
+
+The agent economy is being shaped by three official, public standards. **None are proprietary to Arc** — Arc adopted and deployed them.
+
+### ERC-8004 — Trustless Agents
+Authors: Davide Crapis (Ethereum Foundation dAI), Marco De Rossi (MetaMask), Jordan Ellis (Google), Erik Reppel (Coinbase). Reviewed by 100+ companies. [Spec →](https://eips.ethereum.org/EIPS/eip-8004)
+
+Three registries:
+- **IdentityRegistry** — every agent gets an ERC-721 NFT identity
+- **ReputationRegistry** — peer feedback, on-chain scoring
+- **ValidationRegistry** — third-party validators certify capabilities
+
+### ERC-8183 — Agentic Commerce
+Authors: Davide Crapis (EF dAI), Bryan Lim, Tay Weixiong, Chooi Zuhwa (Virtuals Protocol). [Spec →](https://eips.ethereum.org/EIPS/eip-8183)
+
+A 6-state escrow lifecycle for AI-to-AI work contracts: `Open → Funded → Submitted → Completed | Rejected | Expired`. Money is locked before work begins, released only on approval, recoverable on dispute.
+
+### Circle Nanopayments + x402
+Gas-free USDC transfers as small as **$0.000001** (one millionth of a dollar). Built on Circle's Gateway: one on-chain deposit, then unlimited off-chain signed authorizations batched periodically. [Blog →](https://www.circle.com/blog/circle-nanopayments-launches-on-testnet-as-the-core-primitive-for-agentic-economic-activity)
+
+The x402 protocol (HTTP 402 Payment Required) lets any API charge per-call. Combined with Gateway batching, sub-cent API pricing finally works.
+
+---
+
+## Real Scenarios
+
+### Scenario 1 — Premium Data API (Hackathon Demo)
+
+Two agents on Arc, no humans involved:
+
+```
+Buyer AI                           Seller (Circle reference demo)
+   │                                       │
+   ├── nano_deposit("1 USDC") ──→ Gateway Wallet (one tx, ~5¢ gas)
+   │                                       │
+   ├── nano_pay(/api/quote)    ──→ 402 + signed authorization → 200 OK + data ($0.001)
+   ├── nano_pay(/api/dataset)  ──→ ($0.01)
+   ├── nano_pay(/api/compute)  ──→ ($0.0003)
+   ├── ... × 50 calls ...
+   │
+   └── Total: ~$0.25 spent, 1 on-chain tx for gas
+       Traditional CCTP per-call: $0.30+ gas EACH → 50× = $15+ → unviable
+```
+
+The **margin difference** ($15 vs $0.05 in gas) is the entire point of nanopayments.
+
+### Scenario 2 — Translation Marketplace
+
+Your AI hires three other AIs to translate one document into ten languages:
+
+```
+Your AI                Translator AI #1     #2     #3
+   │                          │              │      │
+   agent_register  ─────→  has identity, has reputation
+   job_create($50, "translate to 10 languages")
+   job_fund($50)  ─────→  escrowed
+                              │
+                          job_submit(hash)
+                              │
+   job_complete  ─────→  $50 released, distributed
+   agent_reputation(+5, "fast and accurate")
+```
+
+If the translation is bad: `job_reject` → `job_claim_refund` → your $50 comes back.
+
+### Scenario 3 — NFT Trading Curator
+
+```
+Your AI Curator          Seller AI
+   │                          │
+   balance ──────→  500 USDC available
+   agent_reputation(seller) → 4.9★, 47 prior sales
+   job_create("buy NFT #1234, $50")
+   job_fund($50) ──→ escrow
+                              │
+                          NFT transferred to your wallet
+                          job_submit(tx_hash)
+   job_complete  ──→ $50 to seller
+   swap($50 USDC → $40 EURC)  (you wanted EUR)
+   bridge_send($40 EURC → Base Sepolia)  (you wanted Base)
+```
+
+Single conversation. Multiple chains. No human clicks.
+
+---
 
 ## Quick Start
 
-### 1. Clone & Install
+### 1. Clone & install
 
 ```bash
-git clone https://github.com/anthropics/arcent.git
-cd arcent/mcp-server
+git clone https://github.com/<your-username>/arcent-agent-mcp.git
+cd arcent-agent-mcp/mcp-server
 npm install
+npm run build
 ```
 
-### 2. Configure Claude Code
+### 2. Configure environment
 
-Add to your `.mcp.json` (or it's already included):
+```bash
+cp .mcp.json.example .mcp.json
+# Edit .mcp.json — add your KIT_KEY (from Circle Console)
+```
+
+### 3. Add to Claude Desktop
+
+In your Claude Desktop config:
 
 ```json
 {
@@ -71,7 +188,7 @@ Add to your `.mcp.json` (or it's already included):
     "arc-agent-toolkit": {
       "command": "npx",
       "args": ["tsx", "mcp-server/src/index.ts"],
-      "cwd": "/path/to/arcent",
+      "cwd": "/path/to/arcent-agent-mcp",
       "env": {
         "ARC_RPC": "https://rpc.testnet.arc.network",
         "KIT_KEY": "KIT_KEY:<keyId>:<keySecret>"
@@ -81,26 +198,38 @@ Add to your `.mcp.json` (or it's already included):
 }
 ```
 
-### 3. Use It
+### 4. Talk to Claude
 
-Open Claude Code and start talking:
-
-> "Register an AI agent with metadata URI ipfs://..."
-> "Create a job for provider 0xABC... with description 'analyze market data'"
+> "Register an AI agent for me on Arc"
+> "Deposit 1 USDC into Gateway, then pay http://localhost:3000/api/quote"
 > "Check the status of job #42"
+
+Need testnet USDC? [Circle faucet](https://faucet.circle.com).
+
+---
 
 ## Architecture
 
 ```
-Claude Code ──MCP──> arc-agent-toolkit ──RPC──> Arc Testnet
-                          │
-                          ├── ERC-8004 (Identity)
-                          ├── ERC-8183 (Jobs + Escrow)
-                          ├── CCTP v2 (Bridge)
-                          └── USDC (Payments)
+Claude / Cursor / any MCP client
+              │
+              ▼
+   arcent-agent-mcp (this repo)
+   ├── 13 stateless tools  → return unsigned tx, wallet signs
+   └── 4 stateful tools    → SDK signs directly (privateKey arg)
+              │
+              ▼
+              Arc Testnet (chainId 5042002)
+              ├── ERC-8004 contracts (0x8004...)
+              ├── ERC-8183 contract (0x0747EE...)
+              ├── Circle Gateway (0x0077777d... + 0x0022222A...)
+              ├── CCTP v2 (0x8FE6B9...)
+              └── USDC + EURC
 ```
 
-**Key design:** Stateless MCP server. Never holds private keys. Returns unsigned transactions for the wallet to sign.
+**Hybrid pattern by design:** Where SDK abstraction helps (`swap`, `bridge_send`, `send_token`, `nano_pay`), we wrap official Circle SDKs. Where direct contract calls are cleaner (all `agent_*` and `job_*` tools), we use viem to return unsigned transactions for the wallet to sign.
+
+---
 
 ## Contract Addresses (Arc Testnet)
 
@@ -108,32 +237,57 @@ Claude Code ──MCP──> arc-agent-toolkit ──RPC──> Arc Testnet
 |---|---|
 | USDC | `0x3600000000000000000000000000000000000000` |
 | EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` |
-| ERC-8183 (Jobs) | `0x0747EEf0706327138c69792bF28Cd525089e4583` |
-| IdentityRegistry | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
-| ReputationRegistry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
-| ValidationRegistry | `0x8004Cb1BF31DAf7788923b405b754f57acEB4272` |
-| CCTP TokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` |
+| ERC-8183 (Agentic Jobs) | `0x0747EEf0706327138c69792bF28Cd525089e4583` |
+| IdentityRegistry (ERC-8004) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
+| ReputationRegistry (ERC-8004) | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| ValidationRegistry (ERC-8004) | `0x8004Cb1BF31DAf7788923b405b754f57acEB4272` |
+| Gateway Wallet (Circle Nanopayments) | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` |
+| Gateway Minter (Circle Nanopayments) | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` |
+| CCTP TokenMessenger v2 | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` |
 | FxEscrow (StableFX) | `0x867650F5eAe8df91445971f14d89fd84F0C9a9f8` |
 | Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
+
+---
 
 ## Tech Stack
 
 - **TypeScript** + [MCP SDK](https://github.com/modelcontextprotocol/sdk) + [viem](https://viem.sh) + [Zod](https://zod.dev)
 - **Arc Testnet** — Circle's EVM-compatible L1 with USDC-native gas
-- **ERC-8183** — Agentic job standard (escrow, deliverables, settlement)
-- **ERC-8004** — Agent identity & reputation (ERC-721 based)
+- **Circle App Kits** — `@circle-fin/app-kit`, `@circle-fin/swap-kit` for Bridge/Swap/Send
+- **Circle Nanopayments SDK** — `@circle-fin/x402-batching` for gasless x402 payments
 - **CCTP v2** — Circle's cross-chain transfer protocol
-- **App Kit** — Circle's `@circle-fin/swap-kit` for StableFX USDC↔EURC swap
+
+---
+
+## Project Evolution
+
+This project started in a different direction. The first iteration was a custom cross-chain bridge — IntentVault and SettlementReactor contracts, an SP1 ZK prover for storage proof verification, end-to-end tested on Base Sepolia. Solid engineering, no audience: Circle's CCTP v2 already solved the same problem better.
+
+The pivot came after reading Arc's adoption of two emerging Ethereum standards — ERC-8004 (Trustless Agents) and ERC-8183 (Agentic Commerce) — both authored by the Ethereum Foundation's dAI team alongside MetaMask, Google, Coinbase, and Virtuals Protocol. **Standards existed, but no MCP toolkit wrapped them for AI agents.** That gap became Arcent Agent MCP.
+
+Old custom-bridge code is preserved at git tag `v1.0-custom-bridge` for reference.
+
+---
+
+## Hackathon
+
+This repo is the submission for the **Agentic Economy on Arc Hackathon** ([lablab.ai](https://lablab.ai/ai-hackathons/nano-payments-arc)) — Track 3: Data Services. The demo scenario above ($0.25 in 50 nanopayments vs $15 in gas) is the live submission demo.
+
+Team: `0xarcent`. Solo build.
+
+---
 
 ## Resources
 
-- [Arc Docs](https://docs.arc.network)
-- [Arc Community](https://community.arc.network)
-- [ERC-8183 Tutorial](https://docs.arc.network/arc/tutorials/create-your-first-erc-8183-job)
-- [ERC-8004 Tutorial](https://docs.arc.network/arc/tutorials/register-your-first-ai-agent)
-- [Testnet Faucet](https://faucet.circle.com)
-- [Arc Explorer](https://testnet.arcscan.app)
+- [Arc Docs](https://docs.arc.network) · [Arc Community](https://community.arc.network) · [Arc Explorer](https://testnet.arcscan.app)
+- [ERC-8004 Spec](https://eips.ethereum.org/EIPS/eip-8004) · [ERC-8183 Spec](https://eips.ethereum.org/EIPS/eip-8183)
+- [Circle Nanopayments Blog](https://www.circle.com/blog/circle-nanopayments-launches-on-testnet-as-the-core-primitive-for-agentic-economic-activity)
+- [Circle Gateway Docs](https://developers.circle.com/gateway)
+- [Circle Faucet (testnet USDC)](https://faucet.circle.com)
+- [Reference seller demo](https://github.com/circlefin/arc-nanopayments) — used in our Track 3 demo
+
+---
 
 ## License
 
-MIT
+[MIT](LICENSE) — Copyright (c) 2026 Samet Arslan (arcent)
