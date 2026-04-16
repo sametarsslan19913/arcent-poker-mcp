@@ -61,3 +61,6 @@ coverage/
 
 # External reference repos (cloned locally, not part of our codebase)
 research/external-repos/
+
+# Internal research scrapes (hackathon page HTML/JSON, ~16MB, not for public repo)
+research/lablab-scrape/

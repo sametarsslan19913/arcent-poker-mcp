@@ -266,12 +266,20 @@ End-to-end verification artifacts live in `demos/`:
 | Test | Result | Artifact |
 |---|---|---|
 | Clean nano_pay run | **300/300** settled, 0 failures | `demos/nano-e2e.json` |
-| Extended stress test | 727/777 (93.6%) — surfaced Gateway credit-window bug, fixed | `demos/nano-e2e-stress.json` |
+| Edge-case probes (parallel/burst/hammer/cheap/bad-URL/re-init) | **85/88** settled (3 bad-URL gracefully failed, no charge) | `demos/nano-probes.json` |
+| **Hardened 1K stress test** | **1000/1000 settled**, 0 fail, 0 dup, reconciliation MATCH ✓ | `demos/nano-1k-stress.json` |
 | Escrow reject + auto-refund | Verified on Arc testnet | `demos/safety-e2e.json` |
 | MCP live invocation | `nano_deposit` + `nano_pay` called from Claude Desktop | `demos/mcp-live-test.json` |
 | App Kit send/bridge/swap | E2E on Arc + cross-chain to Base Sepolia | `demos/appkit-e2e.json`, `demos/swap-e2e.json` |
 
-**Cumulative:** 1,077 nano_pay calls executed, 1,027 settled (95.4%) — **21× the 50-call hackathon minimum**. Total gas: ~$0.10 across both test rounds.
+**Cumulative:** **1,385 nano_pay calls executed**, all clean settlements (100% on clean + hardened, 3 probe bad-URLs gracefully rejected with zero charge) — **27× the 50-call hackathon minimum**. Latency on 1K run: p50=360ms, p95=425ms, p99=513ms. Total gas: **$0.008155 across 3 deposits** ≈ **36,787× cheaper than traditional CCTP per-call ($300+ for 1000 calls)**.
+
+**On-chain verification (1K stress deposits, Arc Testnet):**
+- Initial deposit (call 0): [`0xd118d4ac...e618e`](https://testnet.arcscan.app/tx/0xd118d4acf9f263316aa0be822e0f84d19c6cae415838c3e1eb67457aae1e618e)
+- Preemptive top-up (call 451): [`0xc2daf47c...c4fae1`](https://testnet.arcscan.app/tx/0xc2daf47c9d78beb29e1cc7e15fc1f2f356e0672673095bb87e4ff04281c4fae1)
+- Preemptive top-up (call 951): [`0x207a681c...26eaff`](https://testnet.arcscan.app/tx/0x207a681c6b8c7071ea7c88d4935becc250dd691e8566ba39cb8376ec1226eaff)
+
+Buyer wallet: `0x29C2F998B325053F2e81532b5e3a44dac7A84978` · Seller wallet: `0xafEEfe92766Dfb27916f7fc853992012934f291c`. All 1,000 individual nano_pay settlements are in `demos/nano-1k-stress.json`.
 
 ---
 
@@ -300,7 +308,7 @@ Team: `0xarcent`. Solo build.
 - [Circle Nanopayments Blog](https://www.circle.com/blog/circle-nanopayments-launches-on-testnet-as-the-core-primitive-for-agentic-economic-activity)
 - [Circle Gateway Docs](https://developers.circle.com/gateway)
 - [Circle Faucet (testnet USDC)](https://faucet.circle.com)
-- [Reference seller demo](https://github.com/circlefin/arc-nanopayments) — used in our Track 3 demo
+- [Reference seller demo](https://github.com/circlefin/arc-nanopayments) — used in our Track 2 demo
 
 ---
 
