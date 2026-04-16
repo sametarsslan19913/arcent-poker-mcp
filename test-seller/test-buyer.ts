@@ -62,7 +62,33 @@ async function main() {
 
   console.log(`Running ${TOTAL_CALLS} nano_pay calls round-robin across ${endpoints.length} endpoints (${DELAY_MS}ms between calls)...\n`);
 
+  let failCount = 0;
+  const startAll = Date.now();
+
   for (let i = 0; i < TOTAL_CALLS; i++) {
+    // Preemptive balance check every 50 calls — avoids fail-then-recover pattern
+    if (i > 0 && i % 50 === 0) {
+      try {
+        const b = await gateway.getBalances();
+        if (b.gateway.available < 500_000n) { // < 0.5 USDC → top up before it runs out
+          console.log(`  → Preemptive redeposit (current: ${b.gateway.formattedAvailable})...`);
+          const rd = await gateway.deposit("1");
+          console.log(`  → Deposited (tx ${rd.depositTxHash.slice(0, 10)}...), waiting for Gateway credit...`);
+          // Wait up to 90s for Gateway attestation + mint
+          for (let j = 0; j < 45; j++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const nb = await gateway.getBalances();
+            if (nb.gateway.available > 800_000n) {
+              console.log(`  → Credited after ${(j + 1) * 2}s: ${nb.gateway.formattedAvailable}`);
+              break;
+            }
+          }
+        }
+      } catch (pe) {
+        console.error(`  preemptive check failed: ${(pe as Error).message}`);
+      }
+    }
+
     const ep = endpoints[i % endpoints.length];
     const start = Date.now();
     try {
@@ -71,9 +97,34 @@ async function main() {
       const amount = parseFloat(r.formattedAmount);
       totalSpent += amount;
       results.push({ idx: i + 1, url: ep.url, method: ep.method, amount: r.formattedAmount, transaction: r.transaction, status: r.status, latencyMs: ms });
-      console.log(`#${(i + 1).toString().padStart(2)} ${ep.method.padEnd(4)} ${ep.url.split("/").pop()!.padEnd(12)} ${r.formattedAmount} USDC  (${ms}ms)  tx:${r.transaction.slice(0, 10)}...`);
+      if ((i + 1) % 50 === 0 || i + 1 === TOTAL_CALLS) {
+        const elapsed = ((Date.now() - startAll) / 1000).toFixed(0);
+        console.log(`[${i + 1}/${TOTAL_CALLS}] elapsed ${elapsed}s, spent ${totalSpent.toFixed(4)} USDC, fails ${failCount}`);
+      }
     } catch (e) {
+      failCount++;
       console.error(`#${i + 1} FAILED: ${(e as Error).message}`);
+      // Reactive fallback: if preemptive check missed it, try recovery
+      if (failCount % 10 === 0) {
+        try {
+          const b = await gateway.getBalances();
+          if (b.gateway.available < 100_000n) {
+            console.log(`  → Emergency redeposit (balance ${b.gateway.formattedAvailable})...`);
+            const rd = await gateway.deposit("1");
+            console.log(`  → Deposited, waiting for credit...`);
+            for (let j = 0; j < 45; j++) {
+              await new Promise((r) => setTimeout(r, 2000));
+              const nb = await gateway.getBalances();
+              if (nb.gateway.available > 800_000n) {
+                console.log(`  → Credited: ${nb.gateway.formattedAvailable}`);
+                break;
+              }
+            }
+          }
+        } catch (re) {
+          console.error(`  redeposit check failed: ${(re as Error).message}`);
+        }
+      }
     }
     if (i < TOTAL_CALLS - 1) await new Promise((r) => setTimeout(r, DELAY_MS));
   }

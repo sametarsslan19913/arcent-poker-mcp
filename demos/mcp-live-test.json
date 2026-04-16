@@ -1,0 +1,29 @@
+{
+  "title": "Arcent MCP — Live Tool Call Test (from Claude Code session)",
+  "description": "Proof that MCP tools work when invoked directly by an AI agent (Claude), not just via script. This is the judge-perspective test: what happens when they ask Claude to 'make a nanopayment'.",
+  "network": "arcTestnet",
+  "buyer": "0x29C2F998B325053F2e81532b5e3a44dac7A84978",
+  "seller": "http://localhost:3000",
+  "testedTools": [
+    {
+      "tool": "nano_pay",
+      "invokedBy": "Claude Code MCP client",
+      "endpoint": "http://localhost:3000/api/premium/quote",
+      "method": "GET",
+      "result": "status=paid, amount=0.001 USDC, latency=404ms",
+      "paymentId": "a8d66aad-1264-4ce8-8728-ccdca9c75ec0",
+      "responseData": "Helen Keller quote returned"
+    },
+    {
+      "tool": "nano_deposit",
+      "invokedBy": "Claude Code MCP client",
+      "amountUsdc": "0.2",
+      "result": "status=deposited, gatewayAvailable=0.8964 USDC",
+      "depositTxHash": "0x32e3795d0135329891a02b161f075d1abb886388d9ecfe2aed007716eeacdb6f",
+      "approvalTxHash": "0xdcb981c16c789526b0a9159cedb2b10d2529729d2f3aaf1b56ebdbd258104da6",
+      "explorer": "https://testnet.arcscan.app/tx/0x32e3795d0135329891a02b161f075d1abb886388d9ecfe2aed007716eeacdb6f"
+    }
+  ],
+  "significance": "Judge will test tools the same way: via Claude/Cursor MCP invocation. These tests prove the flow works end-to-end from natural language instruction to on-chain settlement.",
+  "timestamp": "2026-04-16T01:20:00.000Z"
+}
