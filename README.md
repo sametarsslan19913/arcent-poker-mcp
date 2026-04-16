@@ -4,7 +4,7 @@
 
 > **Note:** **Not affiliated with [cutepawss/arcent](https://github.com/cutepawss/arcent) (x402 gateway) or U.S. Army Central.** Arcent Agent MCP is a separate project — the first MCP-native toolkit for Arc's agent economy.
 
-> Built for the **[Agentic Economy on Arc Hackathon](https://lablab.ai/ai-hackathons/nano-payments-arc)** — Track 3: Data Services.
+> Built for the **[Agentic Economy on Arc Hackathon](https://lablab.ai/ai-hackathons/nano-payments-arc)** — Track 2: Agent-to-Agent Payment Loop.
 
 ---
 
@@ -259,6 +259,22 @@ Claude / Cursor / any MCP client
 
 ---
 
+## Testing
+
+End-to-end verification artifacts live in `demos/`:
+
+| Test | Result | Artifact |
+|---|---|---|
+| Clean nano_pay run | **300/300** settled, 0 failures | `demos/nano-e2e.json` |
+| Extended stress test | 727/777 (93.6%) — surfaced Gateway credit-window bug, fixed | `demos/nano-e2e-stress.json` |
+| Escrow reject + auto-refund | Verified on Arc testnet | `demos/safety-e2e.json` |
+| MCP live invocation | `nano_deposit` + `nano_pay` called from Claude Desktop | `demos/mcp-live-test.json` |
+| App Kit send/bridge/swap | E2E on Arc + cross-chain to Base Sepolia | `demos/appkit-e2e.json`, `demos/swap-e2e.json` |
+
+**Cumulative:** 1,077 nano_pay calls executed, 1,027 settled (95.4%) — **21× the 50-call hackathon minimum**. Total gas: ~$0.10 across both test rounds.
+
+---
+
 ## Project Evolution
 
 This project started in a different direction. The first iteration was a custom cross-chain bridge — IntentVault and SettlementReactor contracts, an SP1 ZK prover for storage proof verification, end-to-end tested on Base Sepolia. Solid engineering, no audience: Circle's CCTP v2 already solved the same problem better.
@@ -271,7 +287,7 @@ Old custom-bridge code is preserved at git tag `v1.0-custom-bridge` for referenc
 
 ## Hackathon
 
-This repo is the submission for the **Agentic Economy on Arc Hackathon** ([lablab.ai](https://lablab.ai/ai-hackathons/nano-payments-arc)) — Track 3: Data Services. The demo scenario above ($0.25 in 50 nanopayments vs $15 in gas) is the live submission demo.
+This repo is the submission for the **Agentic Economy on Arc Hackathon** ([lablab.ai](https://lablab.ai/ai-hackathons/nano-payments-arc)) — Track 2: Agent-to-Agent Payment Loop. The demo scenario above ($0.25 in 50 nanopayments vs $15 in gas) is the live submission demo.
 
 Team: `0xarcent`. Solo build.
 
