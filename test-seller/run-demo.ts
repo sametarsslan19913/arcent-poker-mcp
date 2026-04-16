@@ -1,0 +1,127 @@
+/**
+ * Arcent Nano — Live Demo Orchestration
+ *
+ * Single-command demo for video recording. ~45 seconds runtime.
+ *
+ * Flow:
+ *  1. Show buyer balances
+ *  2. Deposit 0.3 USDC to Circle Gateway
+ *  3. Wait for attestation credit
+ *  4. Execute 15 nano_pay calls across 4 paywalled endpoints
+ *  5. Print summary + explorer link
+ *
+ * Prerequisites:
+ *  - Seller running on :3000 (npm run dev in this folder)
+ *  - .env configured with BUYER_PRIVATE_KEY
+ *  - Buyer wallet has >= 0.5 USDC
+ *
+ * Usage: cd test-seller && npx tsx run-demo.ts
+ */
+import { GatewayClient } from "@circle-fin/x402-batching/client";
+import fs from "fs";
+import path from "path";
+
+const envPath = path.resolve(".env");
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, "utf-8").split("\n")) {
+    const m = line.match(/^([A-Z_]+)=(.+)$/);
+    if (m) process.env[m[1]] = m[2];
+  }
+}
+
+const BUYER_KEY = process.env.BUYER_PRIVATE_KEY as `0x${string}` | undefined;
+const BASE_URL = "http://localhost:3000";
+const NETWORK = "arcTestnet";
+
+if (!BUYER_KEY) {
+  console.error("FATAL: BUYER_PRIVATE_KEY missing in test-seller/.env");
+  process.exit(1);
+}
+
+type Endpoint = { tag: string; url: string; method: "GET" | "POST"; price: string; body?: unknown };
+const endpoints: Endpoint[] = [
+  { tag: "quote",      url: "/api/premium/quote",      method: "GET",  price: "$0.001"  },
+  { tag: "dataset",    url: "/api/premium/dataset",    method: "GET",  price: "$0.01"   },
+  { tag: "compute",    url: "/api/premium/compute",    method: "POST", price: "$0.0003", body: { text: "demo" } },
+  { tag: "agent-task", url: "/api/premium/agent-task", method: "GET",  price: "$0.03"   },
+];
+
+function banner(msg: string) {
+  const line = "=".repeat(60);
+  console.log(`\n${line}\n  ${msg}\n${line}`);
+}
+
+function stage(n: number, msg: string) {
+  console.log(`\n[${n}] ${msg}`);
+}
+
+async function main() {
+  banner("Arcent Nano - Live Demo");
+
+  const probe = await fetch(`${BASE_URL}/stats`).catch(() => null);
+  if (!probe || !probe.ok) {
+    console.error("\nERROR: Seller not reachable at " + BASE_URL);
+    console.error("Start it: cd test-seller && npm run dev\n");
+    process.exit(1);
+  }
+
+  const g = new GatewayClient({ chain: NETWORK, privateKey: BUYER_KEY });
+
+  stage(1, "Buyer balances");
+  const before = await g.getBalances();
+  console.log(`    Address:  ${g.address}`);
+  console.log(`    Wallet:   ${before.wallet.formatted} USDC`);
+  console.log(`    Gateway:  ${before.gateway.formattedAvailable} USDC`);
+
+  stage(2, "Deposit 0.3 USDC to Circle Gateway");
+  const depStart = Date.now();
+  const dep = await g.deposit("0.3");
+  console.log(`    Tx hash:  ${dep.depositTxHash}`);
+  console.log(`    Explorer: https://testnet.arcscan.app/tx/${dep.depositTxHash}`);
+
+  stage(3, "Wait for attestation credit");
+  const target = before.gateway.available + BigInt(250_000);
+  let creditMs: number | null = null;
+  for (let i = 0; i < 45; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const b = await g.getBalances();
+    if (b.gateway.available >= target) {
+      creditMs = Date.now() - depStart;
+      console.log(`    Credited in ${(creditMs / 1000).toFixed(1)}s. Gateway: ${b.gateway.formattedAvailable} USDC`);
+      break;
+    }
+  }
+  if (creditMs === null) {
+    console.error("    Credit timeout after 45s. Aborting.");
+    process.exit(1);
+  }
+
+  stage(4, "Execute 15 nano_pay calls (round-robin 4 endpoints)");
+  let totalSpent = 0;
+  const latencies: number[] = [];
+  for (let i = 0; i < 15; i++) {
+    const ep = endpoints[i % endpoints.length];
+    const t0 = Date.now();
+    const r = await g.pay(`${BASE_URL}${ep.url}`, { method: ep.method, body: ep.body });
+    const ms = Date.now() - t0;
+    latencies.push(ms);
+    totalSpent += parseFloat(r.formattedAmount);
+    const idx = String(i + 1).padStart(2);
+    console.log(`    ${idx}/15  ${ep.tag.padEnd(11)} ${ep.price.padStart(8)}  ${String(ms).padStart(4)}ms  tx=${r.transaction.slice(0, 8)}...`);
+  }
+
+  stage(5, "Summary");
+  const after = await g.getBalances();
+  const avgLat = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+  console.log(`    Settled:     15 / 15`);
+  console.log(`    Spent:       ${totalSpent.toFixed(6)} USDC`);
+  console.log(`    Avg latency: ${avgLat}ms`);
+  console.log(`    Gateway:     ${before.gateway.formattedAvailable} -> ${after.gateway.formattedAvailable} USDC`);
+
+  banner("Full 1K proof: demos/nano-1k-stress.json - 1000/1000, reconciliation MATCH");
+}
+
+main().catch((e) => {
+  console.error("\nFATAL:", (e as Error).message);
+  process.exit(1);
+});
