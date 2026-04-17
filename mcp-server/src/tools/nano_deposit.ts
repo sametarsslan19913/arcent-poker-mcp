@@ -37,7 +37,7 @@ export async function nanoDepositHandler(args: {
       walletUsdcBalance: balances.wallet.formatted,
       chain,
       explorer: `https://testnet.arcscan.app/tx/${result.depositTxHash}`,
-      note: "USDC deposited to Circle Gateway. From now on payments are gasless off-chain transfers via nano_pay. Only this deposit cost gas.",
+      note: "Gateway deposit complete. Subsequent nano_pay calls are gasless.",
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);

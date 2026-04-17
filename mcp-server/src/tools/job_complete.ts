@@ -1,4 +1,4 @@
-import { encodeFunctionData, keccak256, toHex } from "viem";
+import { encodeFunctionData, keccak256, stringToHex } from "viem";
 import { config } from "../config.js";
 import { ERC8183Abi } from "../chains.js";
 import { okResult, errorResult, err } from "../errors.js";
@@ -11,7 +11,7 @@ export async function jobCompleteHandler(args: {
   const evaluator = args.evaluator as `0x${string}`;
   const jobId = BigInt(args.jobId);
   const reason = args.reason ?? "approved";
-  const reasonHash = keccak256(toHex(reason));
+  const reasonHash = keccak256(stringToHex(reason));
 
   const data = encodeFunctionData({
     abi: ERC8183Abi,
@@ -29,6 +29,6 @@ export async function jobCompleteHandler(args: {
     evaluator,
     jobId: jobId.toString(),
     reasonHash,
-    note: "Evaluator (msg.sender) approves the deliverable and releases payment to the provider.",
+    note: "Approve deliverable and release payment.",
   });
 }

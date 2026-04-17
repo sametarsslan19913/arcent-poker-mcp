@@ -32,6 +32,6 @@ export async function agentRegisterHandler(args: {
     },
     owner,
     metadataURI,
-    note: "This tx mints an ERC-721 identity NFT for your AI agent. The caller (msg.sender) becomes the agent owner.",
+    note: "Mint identity NFT; caller becomes owner.",
   });
 }

@@ -81,7 +81,7 @@ export async function sendTokenHandler(args: {
       amount: args.amount,
       token,
       chain,
-      note: "Send via Circle App Kit. Same-chain token transfer.",
+      note: "Same-chain transfer via App Kit.",
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);

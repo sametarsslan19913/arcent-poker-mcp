@@ -51,6 +51,6 @@ export async function jobCreateHandler(args: {
     description,
     expiredAt: expiredAt.toString(),
     deadlineMinutes: clampedMinutes,
-    note: "Client (msg.sender) creates the job. After tx, extract jobId from JobCreated event logs. Provider must call job_set_budget next.",
+    note: "Extract jobId from JobCreated event. Provider calls job_set_budget next.",
   });
 }

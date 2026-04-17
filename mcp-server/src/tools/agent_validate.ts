@@ -2,7 +2,7 @@ import { encodeFunctionData } from "viem";
 import { config } from "../config.js";
 import { arcClient, ValidationRegistryAbi } from "../chains.js";
 import { okResult, errorResult, err } from "../errors.js";
-import { keccak256, toHex } from "viem";
+import { keccak256, stringToHex } from "viem";
 
 export async function agentValidateHandler(args: {
   action: string;
@@ -23,7 +23,7 @@ export async function agentValidateHandler(args: {
       return errorResult(err("E_MISSING_PARAMS", "request action requires: owner, validator, agentId, requestURI"));
     }
 
-    const requestHash = keccak256(toHex(`${agentId}-${requestURI}-${Date.now()}`));
+    const requestHash = keccak256(stringToHex(`${agentId}-${requestURI}-${Date.now()}`));
 
     const data = encodeFunctionData({
       abi: ValidationRegistryAbi,
@@ -45,7 +45,7 @@ export async function agentValidateHandler(args: {
       },
       owner,
       requestHash,
-      note: "Owner sends this tx to request validation from the specified validator.",
+      note: "Request validation from validator.",
     });
   }
 
@@ -56,7 +56,7 @@ export async function agentValidateHandler(args: {
     }
 
     const responseCode = response ?? 100; // 100 = passed, 0 = failed
-    const responseHash = keccak256(toHex(`${requestHash}-${responseCode}-${Date.now()}`));
+    const responseHash = keccak256(stringToHex(`${requestHash}-${responseCode}-${Date.now()}`));
 
     const data = encodeFunctionData({
       abi: ValidationRegistryAbi,
@@ -80,7 +80,7 @@ export async function agentValidateHandler(args: {
       validator,
       requestHash,
       responseCode,
-      note: "Validator sends this tx to respond. 100 = passed, 0 = failed.",
+      note: "Validator response; 100 = passed, 0 = failed.",
     });
   }
 

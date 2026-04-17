@@ -24,11 +24,11 @@
     "viem": "^2.47.12",
     "x402": "^1.1.0",
     "x402-axios": "^1.1.0",
-    "zod": "^4.3.6"
+    "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
+    "@types/node": "^22.10.0",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^5.9.0"
   }
 }

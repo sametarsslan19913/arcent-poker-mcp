@@ -2,7 +2,7 @@ import { encodeFunctionData } from "viem";
 import { config } from "../config.js";
 import { ReputationRegistryAbi } from "../chains.js";
 import { okResult, errorResult, err } from "../errors.js";
-import { keccak256, toHex } from "viem";
+import { keccak256, stringToHex } from "viem";
 
 export async function agentReputationHandler(args: {
   action: string;
@@ -26,7 +26,7 @@ export async function agentReputationHandler(args: {
       return errorResult(err("E_NO_REVIEWER", "Reviewer address required for giving feedback"));
     }
 
-    const feedbackHash = keccak256(toHex(`${agentId}-${score}-${Date.now()}`));
+    const feedbackHash = keccak256(stringToHex(`${agentId}-${score}-${Date.now()}`));
 
     const data = encodeFunctionData({
       abi: ReputationRegistryAbi,
@@ -54,7 +54,7 @@ export async function agentReputationHandler(args: {
       agentId,
       score,
       tag,
-      note: "Agent owners cannot give feedback to their own agents. The reviewer (msg.sender) must be a different address.",
+      note: "Reviewer must differ from agent owner (no self-rating).",
     });
   }
 

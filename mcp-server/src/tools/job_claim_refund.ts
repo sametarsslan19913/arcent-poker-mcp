@@ -25,6 +25,6 @@ export async function jobClaimRefundHandler(args: {
     },
     client,
     jobId: jobId.toString(),
-    note: "Client (msg.sender) reclaims escrowed USDC. Use ONLY for Expired jobs (past expiredAt). Bypasses hooks per EIP-8183 spec — guaranteed recovery path after expiry. Rejected jobs auto-refund via job_reject — calling this for Rejected jobs will revert.",
+    note: "Use for Expired jobs only. Rejected jobs auto-refund; calling here reverts.",
   });
 }

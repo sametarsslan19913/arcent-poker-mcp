@@ -117,7 +117,7 @@ export async function nanoPayHandler(args: {
       latencyMs,
       data: result.data,
       chain,
-      note: "x402 nanopayment settled via Circle Gateway. Payment signed off-chain (EIP-3009), batched on-chain. Cost amortized across many calls — single deposit covered all gas.",
+      note: "x402 settlement via Gateway; gasless after deposit.",
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);

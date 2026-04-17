@@ -39,7 +39,7 @@ export async function jobSetBudgetHandler(args: {
     jobId: jobId.toString(),
     amountRaw: amount.toString(),
     amountUsdc: args.amountUsdc,
-    note: "Provider (msg.sender) sets the job budget. After this, client must approve USDC and call job_fund_escrow.",
+    note: "Budget set. Client must approve USDC then call job_fund.",
   });
 }
 
@@ -127,6 +127,6 @@ export async function jobFundEscrowHandler(args: {
     budget: budget.toString(),
     balance: (balance as bigint).toString(),
     needsApproval: (allowance as bigint) < budget,
-    note: "Client (msg.sender) funds the job escrow. Send transactions in order.",
+    note: "Fund escrow; send transactions in order.",
   });
 }

@@ -1,4 +1,4 @@
-import { encodeFunctionData, keccak256, toHex } from "viem";
+import { encodeFunctionData, keccak256, stringToHex } from "viem";
 import { config } from "../config.js";
 import { ERC8183Abi } from "../chains.js";
 import { okResult, errorResult, err } from "../errors.js";
@@ -17,7 +17,7 @@ export async function jobSubmitHandler(args: {
   }
 
   // Hash the deliverable content — on-chain stores only the hash
-  const deliverableHash = keccak256(toHex(deliverable));
+  const deliverableHash = keccak256(stringToHex(deliverable));
 
   const data = encodeFunctionData({
     abi: ERC8183Abi,
@@ -36,6 +36,6 @@ export async function jobSubmitHandler(args: {
     jobId: jobId.toString(),
     deliverableHash,
     deliverablePreview: deliverable.slice(0, 200),
-    note: "Provider (msg.sender) submits the deliverable hash. The actual content is stored off-chain. After this, evaluator can call job_complete.",
+    note: "Deliverable hash submitted. Evaluator can now call job_complete.",
   });
 }

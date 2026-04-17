@@ -82,7 +82,7 @@ export async function bridgeSendHandler(args: {
         state: s.state,
       })),
       speed: result.config?.transferSpeed,
-      note: "Bridge via Circle App Kit (CCTP v2). Attestation handled automatically.",
+      note: "Bridge via App Kit (CCTP v2).",
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
