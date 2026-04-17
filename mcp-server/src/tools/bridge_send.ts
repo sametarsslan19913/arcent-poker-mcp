@@ -1,5 +1,6 @@
 import { AppKit } from "@circle-fin/app-kit";
 import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
+import { parseUnits } from "viem";
 import { okResult, errorResult, err } from "../errors.js";
 
 const SUPPORTED_CHAINS = [
@@ -36,9 +37,12 @@ export async function bridgeSendHandler(args: {
     return errorResult(err("E_INVALID_PK", "privateKey must be a 0x-prefixed 32-byte hex string"));
   }
 
-  const amount = parseFloat(args.amountUsdc);
-  if (isNaN(amount) || amount <= 0) {
-    return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a positive number"));
+  try {
+    if (parseUnits(args.amountUsdc, 6) <= 0n) {
+      return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a positive USDC amount"));
+    }
+  } catch {
+    return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a valid USDC amount"));
   }
 
   const fromChain = normalizeChain(args.fromChain ?? "Arc_Testnet");

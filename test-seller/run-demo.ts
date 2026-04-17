@@ -1,23 +1,12 @@
 /**
- * Arcent Nano — Live Demo Orchestration
+ * Live demo orchestration for video recording. Runs ~45 seconds.
+ * Flow: balances → deposit 0.3 USDC → wait for credit → 15 nano_pay calls → summary.
  *
- * Single-command demo for video recording. ~45 seconds runtime.
- *
- * Flow:
- *  1. Show buyer balances
- *  2. Deposit 0.3 USDC to Circle Gateway
- *  3. Wait for attestation credit
- *  4. Execute 15 nano_pay calls across 4 paywalled endpoints
- *  5. Print summary + explorer link
- *
- * Prerequisites:
- *  - Seller running on :3000 (npm run dev in this folder)
- *  - .env configured with BUYER_PRIVATE_KEY
- *  - Buyer wallet has >= 0.5 USDC
- *
- * Usage: cd test-seller && npx tsx run-demo.ts
+ * Env: BUYER_PRIVATE_KEY in .env. Seller on :3000 (npm run dev).
+ * Usage: npx tsx run-demo.ts
  */
 import { GatewayClient } from "@circle-fin/x402-batching/client";
+import { parseUnits, formatUnits } from "viem";
 import fs from "fs";
 import path from "path";
 
@@ -97,7 +86,7 @@ async function main() {
   }
 
   stage(4, "Execute 15 nano_pay calls (round-robin 4 endpoints)");
-  let totalSpent = 0;
+  let totalSpentRaw = 0n;
   const latencies: number[] = [];
   for (let i = 0; i < 15; i++) {
     const ep = endpoints[i % endpoints.length];
@@ -105,16 +94,17 @@ async function main() {
     const r = await g.pay(`${BASE_URL}${ep.url}`, { method: ep.method, body: ep.body });
     const ms = Date.now() - t0;
     latencies.push(ms);
-    totalSpent += parseFloat(r.formattedAmount);
+    totalSpentRaw += parseUnits(r.formattedAmount, 6);
     const idx = String(i + 1).padStart(2);
     console.log(`    ${idx}/15  ${ep.tag.padEnd(11)} ${ep.price.padStart(8)}  ${String(ms).padStart(4)}ms  tx=${r.transaction.slice(0, 8)}...`);
+    if (i < 14) await new Promise((r) => setTimeout(r, 300 + Math.floor(Math.random() * 500)));
   }
 
   stage(5, "Summary");
   const after = await g.getBalances();
   const avgLat = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
   console.log(`    Settled:     15 / 15`);
-  console.log(`    Spent:       ${totalSpent.toFixed(6)} USDC`);
+  console.log(`    Spent:       ${formatUnits(totalSpentRaw, 6)} USDC`);
   console.log(`    Avg latency: ${avgLat}ms`);
   console.log(`    Gateway:     ${before.gateway.formattedAvailable} -> ${after.gateway.formattedAvailable} USDC`);
 

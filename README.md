@@ -4,7 +4,7 @@
 
 > **Note:** **Not affiliated with [cutepawss/arcent](https://github.com/cutepawss/arcent) (x402 gateway) or U.S. Army Central.** Arcent Agent MCP is a separate project — the first MCP-native toolkit for Arc's agent economy.
 
-> Built for the **[Agentic Economy on Arc Hackathon](https://lablab.ai/ai-hackathons/nano-payments-arc)** — Track 2: Agent-to-Agent Payment Loop.
+> Built for the **[Agentic Economy on Arc Hackathon](https://lablab.ai/ai-hackathons/nano-payments-arc)** — Track 2: Agent-to-Agent Payments.
 
 ---
 
@@ -215,8 +215,8 @@ Claude / Cursor / any MCP client
               │
               ▼
    arcent-agent-mcp (this repo)
-   ├── 13 stateless tools  → return unsigned tx, wallet signs
-   └── 4 stateful tools    → SDK signs directly (privateKey arg)
+   ├── 12 stateless tools  → return unsigned tx, wallet signs
+   └── 5 stateful tools    → SDK signs directly (privateKey arg)
               │
               ▼
               Arc Testnet (chainId 5042002)
@@ -227,7 +227,7 @@ Claude / Cursor / any MCP client
               └── USDC + EURC
 ```
 
-**Hybrid pattern by design:** Where SDK abstraction helps (`swap`, `bridge_send`, `send_token`, `nano_pay`), we wrap official Circle SDKs. Where direct contract calls are cleaner (all `agent_*` and `job_*` tools), we use viem to return unsigned transactions for the wallet to sign.
+**Hybrid pattern by design:** Where SDK abstraction helps (`swap`, `bridge_send`, `send_token`, `nano_deposit`, `nano_pay`), we wrap official Circle SDKs. Where direct contract calls are cleaner (all `agent_*` and `job_*` tools), we use viem to return unsigned transactions for the wallet to sign.
 
 ---
 
@@ -268,9 +268,6 @@ End-to-end verification artifacts live in `demos/`:
 | Clean nano_pay run | **300/300** settled, 0 failures | `demos/nano-e2e.json` |
 | Edge-case probes (parallel/burst/hammer/cheap/bad-URL/re-init) | **85/88** settled (3 bad-URL gracefully failed, no charge) | `demos/nano-probes.json` |
 | **Hardened 1K stress test** | **1000/1000 settled**, 0 fail, 0 dup, reconciliation MATCH ✓ | `demos/nano-1k-stress.json` |
-| Escrow reject + auto-refund | Verified on Arc testnet | `demos/safety-e2e.json` |
-| MCP live invocation | `nano_deposit` + `nano_pay` called from Claude Desktop | `demos/mcp-live-test.json` |
-| App Kit send/bridge/swap | E2E on Arc + cross-chain to Base Sepolia | `demos/appkit-e2e.json`, `demos/swap-e2e.json` |
 
 **Cumulative:** **1,385 nano_pay calls executed**, all clean settlements (100% on clean + hardened, 3 probe bad-URLs gracefully rejected with zero charge) — **27× the 50-call hackathon minimum**. Latency on 1K run: p50=360ms, p95=425ms, p99=513ms. Total gas: **$0.008155 across 3 deposits** ≈ **36,787× cheaper than traditional CCTP per-call ($300+ for 1000 calls)**.
 
@@ -283,36 +280,9 @@ Buyer wallet: `0x29C2F998B325053F2e81532b5e3a44dac7A84978` · Seller wallet: `0x
 
 ---
 
-## Project Evolution
-
-This project started in a different direction. The first iteration was a custom cross-chain bridge — IntentVault and SettlementReactor contracts, an SP1 ZK prover for storage proof verification, end-to-end tested on Base Sepolia. Solid engineering, no audience: Circle's CCTP v2 already solved the same problem better.
-
-The pivot came after reading Arc's adoption of two emerging Ethereum standards — ERC-8004 (Trustless Agents) and ERC-8183 (Agentic Commerce) — both authored by the Ethereum Foundation's dAI team alongside MetaMask, Google, Coinbase, and Virtuals Protocol. **Standards existed, but no MCP toolkit wrapped them for AI agents.** That gap became Arcent Agent MCP.
-
-Old custom-bridge code is preserved at git tag `v1.0-custom-bridge` for reference.
-
-### Repository Layout — Current vs Archive
-
-| Directory | Status | Purpose |
-|---|---|---|
-| `mcp-server/` | **Current** | The 17 MCP tools (the submission) |
-| `test-seller/` | **Current** | Circle reference seller clone + stress-test scripts (nano_pay E2E) |
-| `submission/` | **Current** | Video agent brief + submission handoff files |
-| `demos/` | **Current** | E2E artifacts (nano-1k-stress, nano-probes, safety-e2e, appkit-e2e, swap-e2e) |
-| `research/` | **Current** | Brief documents for submission materials + hackathon research |
-| `contracts/` | **Archive** (v1.0-custom-bridge) | Custom bridge Solidity — IntentVault, SettlementReactorV2/V3, ArcBlockOracle |
-| `relayer/` | **Archive** (v1.0-custom-bridge) | Custom bridge event listener + executor |
-| `example-agent/` | **Archive** (v1.0-custom-bridge) | Early autonomous agent loop using the custom bridge |
-| `zk-prover/` | **Archive** (v1.0-custom-bridge) | SP1 ZK storage proof prover for the custom bridge |
-| `docs/` | **Archive** | Earlier design docs (WHITEPAPER, SPEC, mcp-sdk-research) |
-
-The archive directories are not part of the MCP toolkit submission — they are preserved on master (and more completely at git tag `v1.0-custom-bridge`) for transparency about the project's evolution.
-
----
-
 ## Hackathon
 
-This repo is the submission for the **Agentic Economy on Arc Hackathon** ([lablab.ai](https://lablab.ai/ai-hackathons/nano-payments-arc)) — Track 2: Agent-to-Agent Payment Loop. The demo scenario above ($0.25 in 50 nanopayments vs $15 in gas) is the live submission demo.
+This repo is the submission for the **Agentic Economy on Arc Hackathon** ([lablab.ai](https://lablab.ai/ai-hackathons/nano-payments-arc)) — Track 2: Agent-to-Agent Payments.
 
 Team: `0xarcent`. Solo build.
 

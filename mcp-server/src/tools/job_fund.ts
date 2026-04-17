@@ -1,4 +1,4 @@
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, parseUnits } from "viem";
 import { config } from "../config.js";
 import { arcClient, ERC8183Abi, ERC20Abi } from "../chains.js";
 import { okResult, errorResult, err } from "../errors.js";
@@ -10,7 +10,13 @@ export async function jobSetBudgetHandler(args: {
 }) {
   const provider = args.provider as `0x${string}`;
   const jobId = BigInt(args.jobId);
-  const amount = BigInt(Math.round(parseFloat(args.amountUsdc) * 1_000_000)); // USDC 6 decimals
+
+  let amount: bigint;
+  try {
+    amount = parseUnits(args.amountUsdc, 6);
+  } catch {
+    return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a valid USDC amount"));
+  }
 
   if (amount <= 0n) {
     return errorResult(err("E_ZERO_AMOUNT", "Budget amount must be greater than zero"));

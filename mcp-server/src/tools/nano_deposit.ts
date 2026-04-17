@@ -1,4 +1,5 @@
 import { GatewayClient, type SupportedChainName } from "@circle-fin/x402-batching/client";
+import { parseUnits } from "viem";
 import { okResult, errorResult, err } from "../errors.js";
 
 export async function nanoDepositHandler(args: {
@@ -11,9 +12,12 @@ export async function nanoDepositHandler(args: {
     return errorResult(err("E_INVALID_PK", "privateKey must be a valid 0x-prefixed 32-byte hex string"));
   }
 
-  const amount = parseFloat(args.amountUsdc);
-  if (isNaN(amount) || amount <= 0) {
-    return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a positive number"));
+  try {
+    if (parseUnits(args.amountUsdc, 6) <= 0n) {
+      return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a positive USDC amount"));
+    }
+  } catch {
+    return errorResult(err("E_INVALID_AMOUNT", "amountUsdc must be a valid USDC amount"));
   }
 
   const chain = (args.chain ?? "arcTestnet") as SupportedChainName;

@@ -1,5 +1,6 @@
 import { SwapKit } from "@circle-fin/swap-kit";
 import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
+import { parseUnits } from "viem";
 import { okResult, errorResult, err } from "../errors.js";
 
 const SUPPORTED_TOKENS = ["USDC", "EURC"] as const;
@@ -25,9 +26,12 @@ export async function swapHandler(args: {
     return errorResult(err("E_SAME_TOKEN", "tokenIn and tokenOut must be different"));
   }
 
-  const amount = parseFloat(args.amountIn);
-  if (isNaN(amount) || amount <= 0) {
-    return errorResult(err("E_INVALID_AMOUNT", "amountIn must be a positive number"));
+  try {
+    if (parseUnits(args.amountIn, 6) <= 0n) {
+      return errorResult(err("E_INVALID_AMOUNT", "amountIn must be a positive amount"));
+    }
+  } catch {
+    return errorResult(err("E_INVALID_AMOUNT", "amountIn must be a valid numeric amount"));
   }
 
   const kitKey = process.env.KIT_KEY;

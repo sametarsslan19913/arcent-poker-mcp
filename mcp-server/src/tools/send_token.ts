@@ -1,5 +1,6 @@
 import { AppKit } from "@circle-fin/app-kit";
 import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
+import { parseUnits } from "viem";
 import { okResult, errorResult, err } from "../errors.js";
 
 const SUPPORTED_TOKENS = ["USDC", "EURC", "USDT"] as const;
@@ -42,9 +43,12 @@ export async function sendTokenHandler(args: {
     return errorResult(err("E_INVALID_TO", "Recipient address cannot be zero"));
   }
 
-  const amountNum = parseFloat(args.amount);
-  if (isNaN(amountNum) || amountNum <= 0) {
-    return errorResult(err("E_INVALID_AMOUNT", "amount must be a positive number"));
+  try {
+    if (parseUnits(args.amount, 6) <= 0n) {
+      return errorResult(err("E_INVALID_AMOUNT", "amount must be a positive token amount"));
+    }
+  } catch {
+    return errorResult(err("E_INVALID_AMOUNT", "amount must be a valid numeric string"));
   }
 
   const tokenUpper = (args.token ?? "USDC").toUpperCase();

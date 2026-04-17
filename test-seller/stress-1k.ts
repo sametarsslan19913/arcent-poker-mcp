@@ -21,6 +21,7 @@
  *  ARTIFACT (default ../demos/nano-1k-stress.json)
  */
 import { GatewayClient } from "@circle-fin/x402-batching/client";
+import { parseUnits } from "viem";
 import fs from "fs";
 import path from "path";
 
@@ -39,8 +40,8 @@ const DELAY_MS = Number(process.env.DELAY_MS ?? 400);
 const TOPUP_AT = Number(process.env.TOPUP_AT ?? 500);
 const INITIAL_DEPOSIT = process.env.INITIAL_DEPOSIT ?? "5";
 const TOPUP_AMOUNT = process.env.TOPUP_AMOUNT ?? "5";
-const LOW_WATER_RAW = BigInt(Math.floor(Number(process.env.LOW_WATER ?? "1.0") * 1_000_000));
-const TARGET_AFTER_TOPUP = BigInt(Math.floor(Number(TOPUP_AMOUNT) * 0.8 * 1_000_000));
+const LOW_WATER_RAW = parseUnits(process.env.LOW_WATER ?? "1.0", 6);
+const TARGET_AFTER_TOPUP = (parseUnits(TOPUP_AMOUNT, 6) * 4n) / 5n;
 const ARTIFACT = process.env.ARTIFACT ?? "../demos/nano-1k-stress.json";
 const NETWORK = "arcTestnet";
 
@@ -151,7 +152,7 @@ async function main() {
   console.log(`Buyer: ${g.address}`);
 
   const startBalance = await g.getBalances();
-  const walletToRaw = (formatted: string): bigint => BigInt(Math.round(parseFloat(formatted) * 1_000_000));
+  const walletToRaw = (formatted: string): bigint => parseUnits(formatted, 6);
   const startWalletRaw = walletToRaw(startBalance.wallet.formatted);
   const startGatewayRaw = startBalance.gateway.available;
   console.log(`Start wallet:  ${startBalance.wallet.formatted} USDC`);
@@ -162,7 +163,7 @@ async function main() {
   if (sellerStatsBefore) console.log(`Seller before:  ${sellerStatsBefore.callCount} calls, ${sellerStatsBefore.collectedUsdc} USDC\n`);
 
   // Initial deposit if Gateway low
-  if (startGatewayRaw < BigInt(Math.floor(Number(INITIAL_DEPOSIT) * 1_000_000)) / 2n) {
+  if (startGatewayRaw < parseUnits(INITIAL_DEPOSIT, 6) / 2n) {
     await runDeposit(g, "initial", INITIAL_DEPOSIT, 0, deposits);
   } else {
     console.log(`Skipping initial deposit (Gateway has ${startBalance.gateway.formattedAvailable})\n`);
@@ -197,7 +198,7 @@ async function main() {
     const justDeposited = deposits.length > 0 && deposits[deposits.length - 1].triggeredAtCall === idx;
     if (idx === TOPUP_AT && !justDeposited) {
       const b = await g.getBalances();
-      if (b.gateway.available < BigInt(Math.floor(Number(TOPUP_AMOUNT) * 1_000_000))) {
+      if (b.gateway.available < parseUnits(TOPUP_AMOUNT, 6)) {
         await runDeposit(g, "preemptive", TOPUP_AMOUNT, idx, deposits);
       }
     }
@@ -292,7 +293,7 @@ async function main() {
   // Balance accounting: (startWallet + startGateway) - (endWallet + endGateway) should ≈ totalSpent + gas
   const startTotalRaw = startWalletRaw + startGatewayRaw;
   const endTotalRaw = endWalletRaw + endGatewayRaw;
-  const totalDepositedUsdcRaw = deposits.reduce((s, d) => s + BigInt(Math.floor(Number(d.amount) * 1_000_000)), 0n);
+  const totalDepositedUsdcRaw = deposits.reduce((s, d) => s + parseUnits(d.amount, 6), 0n);
   // movement = wallet→gateway via deposit (no value loss except gas) + gateway→seller via pay (value loss = totalSpent)
   // Therefore: startTotal - endTotal ≈ totalSpent + gasUsedByDeposits
   const accountedSpent = Number(startTotalRaw - endTotalRaw) / 1e6;

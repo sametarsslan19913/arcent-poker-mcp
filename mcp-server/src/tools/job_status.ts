@@ -1,3 +1,4 @@
+import { formatUnits } from "viem";
 import { config } from "../config.js";
 import { arcClient, ERC8183Abi } from "../chains.js";
 import { okResult, errorResult, err } from "../errors.js";
@@ -23,7 +24,7 @@ export async function jobStatusHandler(args: { jobId: string }) {
     });
 
     const result = job as unknown as unknown[];
-    const statusCode = Number(result[7]);
+    const statusCode = Number(result[7] as bigint);
 
     return okResult({
       jobId: (result[0] as bigint).toString(),
@@ -32,7 +33,7 @@ export async function jobStatusHandler(args: { jobId: string }) {
       evaluator: result[3] as string,
       description: result[4] as string,
       budget: (result[5] as bigint).toString(),
-      budgetUsdc: (Number(result[5]) / 1_000_000).toFixed(6),
+      budgetUsdc: formatUnits(result[5] as bigint, 6),
       expiredAt: (result[6] as bigint).toString(),
       status: statusCode,
       statusLabel: STATUS_LABELS[statusCode] ?? `Unknown(${statusCode})`,
