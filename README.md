@@ -40,7 +40,7 @@ No frontend. No SDK glue. Just Claude Desktop config + your private key.
 | Tool | Purpose |
 |---|---|
 | `agent_register` | Mint an ERC-721 identity NFT for your AI agent |
-| `agent_reputation` | Give/query reputation feedback (self-rating blocked) |
+| `agent_reputation` | Give reputation feedback (self-rating blocked; read queries coming soon) |
 | `agent_validate` | Request/respond to validator certifications |
 
 ### Agentic Jobs — ERC-8183 (8)
@@ -105,7 +105,7 @@ The x402 protocol (HTTP 402 Payment Required) lets any API charge per-call. Comb
 Two agents on Arc, no humans involved:
 
 ```
-Buyer AI                           Seller (Circle reference demo)
+Buyer AI                           Seller (custom test-seller/ — Circle-compatible x402)
    │                                       │
    ├── nano_deposit("1 USDC") ──→ Gateway Wallet (one tx, ~5¢ gas)
    │                                       │
@@ -165,7 +165,7 @@ Single conversation. Multiple chains. No human clicks.
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/<your-username>/arcent-agent-mcp.git
+git clone https://github.com/sametarsslan19913/arcent-agent-mcp.git
 cd arcent-agent-mcp/mcp-server
 npm install
 npm run build
@@ -295,7 +295,7 @@ Team: `0xarcent`. Solo build.
 - [Circle Nanopayments Blog](https://www.circle.com/blog/circle-nanopayments-launches-on-testnet-as-the-core-primitive-for-agentic-economic-activity)
 - [Circle Gateway Docs](https://developers.circle.com/gateway)
 - [Circle Faucet (testnet USDC)](https://faucet.circle.com)
-- [Reference seller demo](https://github.com/circlefin/arc-nanopayments) — used in our Track 2 demo
+- [Reference seller demo](https://github.com/circlefin/arc-nanopayments) — our `test-seller/` is a custom Express + x402 implementation, fully compatible with this reference
 
 ---
 

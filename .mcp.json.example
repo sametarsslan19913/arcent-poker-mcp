@@ -3,7 +3,7 @@
     "arc-agent-toolkit": {
       "command": "npx",
       "args": ["tsx", "mcp-server/src/index.ts"],
-      "cwd": "C:\\arcbridge",
+      "cwd": "/absolute/path/to/arcent-agent-mcp",
       "env": {
         "ARC_RPC": "https://rpc.testnet.arc.network",
         "USDC_ADDRESS": "0x3600000000000000000000000000000000000000",
