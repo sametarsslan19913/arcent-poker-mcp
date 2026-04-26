@@ -18,9 +18,21 @@ import { swapHandler } from "./tools/swap.js";
 import { nanoDepositHandler } from "./tools/nano_deposit.js";
 import { nanoPayHandler } from "./tools/nano_pay.js";
 
+// arcent-poker tools (M6.B 2026-04-26).
+import { pokerCreateTournamentHandler } from "./tools/poker_create_tournament.js";
+import { pokerRegisterForTournamentHandler } from "./tools/poker_register_for_tournament.js";
+import { pokerStartTournamentHandler } from "./tools/poker_start_tournament.js";
+import { pokerFinalizeTournamentHandler } from "./tools/poker_finalize_tournament.js";
+import { pokerJoinTableHandler } from "./tools/poker_join_table.js";
+import { pokerActionHandler } from "./tools/poker_action.js";
+import { pokerTableStateHandler } from "./tools/poker_table_state.js";
+import { pokerTournamentStateHandler } from "./tools/poker_tournament_state.js";
+import { pokerDealCommitHandler } from "./tools/poker_deal_commit.js";
+import { pokerDealRevealHandler } from "./tools/poker_deal_reveal.js";
+
 const server = new McpServer({
-  name: "arc-agent-toolkit",
-  version: "2.0.0",
+  name: "arcent-poker-mcp",
+  version: "0.1.0",
 });
 
 // ═══════════════════════════════════════════
@@ -239,10 +251,128 @@ server.tool(
   async (args) => nanoPayHandler(args),
 );
 
+// ═══════════════════════════════════════════
+// arcent-poker (Texas Hold'em on Arc, M6.B)
+// ═══════════════════════════════════════════
+
+server.tool(
+  "poker_create_tournament",
+  "Create a new arcent-poker tournament. tournamentId is derived from `name` via keccak256. Defaults: entryFee 1 USDC, 50/30/20 payout, +30/+10/0 reputation deltas.",
+  {
+    admin: z.string().describe("Admin wallet (will sign + organize)"),
+    name: z.string().describe("Tournament name; deterministic id = keccak256(utf8(name))"),
+    entryFeeUsdc: z.string().optional().describe("Entry fee in USDC (default '1.00')"),
+    minPlayers: z.number().optional().describe("Minimum players to start (default 2)"),
+    maxPlayers: z.number().optional().describe("Maximum players (default 8, hard cap 9)"),
+    payoutBps: z.array(z.number()).optional().describe("Payout distribution in basis points (must sum to 10000). Default [5000,3000,2000]."),
+    reputationDelta: z.array(z.number()).optional().describe("Per-rank reputation delta. Default [30,10,0]. Must match payoutBps length."),
+  },
+  async (args) => pokerCreateTournamentHandler(args),
+);
+
+server.tool(
+  "poker_register_for_tournament",
+  "Register an agent for a tournament. Returns 2 unsigned txs: USDC.approve + Orchestrator.register. Sign in order.",
+  {
+    player: z.string().describe("Player wallet (agent owner). Must equal IdentityRegistry.ownerOf(agentId)."),
+    tournamentId: z.string().describe("Tournament id (32-byte hex)"),
+    agentId: z.string().describe("ERC-8004 agent token id (numeric string)"),
+    entryFeeUsdc: z.string().optional().describe("Entry fee in USDC (must match tournament config; default '1.00')"),
+  },
+  async (args) => pokerRegisterForTournamentHandler(args),
+);
+
+server.tool(
+  "poker_start_tournament",
+  "Start a tournament (admin only). Phase Registering → Running. minPlayers must be met.",
+  {
+    admin: z.string().describe("Admin wallet (must match tournament's admin)"),
+    tournamentId: z.string().describe("Tournament id"),
+  },
+  async (args) => pokerStartTournamentHandler(args),
+);
+
+server.tool(
+  "poker_finalize_tournament",
+  "Finalize a running tournament with a ranking (admin only). Distributes pot per payoutBps, emits ReputationDelta events.",
+  {
+    admin: z.string().describe("Admin wallet"),
+    tournamentId: z.string().describe("Tournament id"),
+    ranking: z.array(z.string()).describe("Agent ids in finishing order (1st,2nd,3rd...). Length must match payoutBps."),
+  },
+  async (args) => pokerFinalizeTournamentHandler(args),
+);
+
+server.tool(
+  "poker_join_table",
+  "Take a seat at a poker table. Buy-in is in chips (separate from USDC entry fee — chips are the in-tournament unit).",
+  {
+    player: z.string().describe("Player wallet"),
+    tableId: z.string().describe("Table id (32-byte hex)"),
+    seatIdx: z.number().describe("Seat slot 0..8"),
+    agentId: z.string().describe("ERC-8004 agent token id (numeric string)"),
+    buyInChips: z.string().describe("Initial chip stack (numeric string)"),
+  },
+  async (args) => pokerJoinTableHandler(args),
+);
+
+server.tool(
+  "poker_action",
+  "Submit a betting action: fold, check, call, raise, or allin. amount is the chips contribution this turn (required for call/raise; must be 0 for fold/check/allin).",
+  {
+    player: z.string().describe("Player wallet (must match the seat's player and the round's currentPlayerSeat)"),
+    tableId: z.string().describe("Table id"),
+    action: z.enum(["fold", "check", "call", "raise", "allin"]).describe("Action label"),
+    amount: z.string().optional().describe("Chips amount as numeric string. Required for call/raise; ignored for fold/check/allin."),
+  },
+  async (args) => pokerActionHandler(args),
+);
+
+server.tool(
+  "poker_table_state",
+  "Read live table state: seats (player, agentId, chips, contributions, folded), current round (currentPlayerSeat, highBet, minRaiseAmount, roundComplete).",
+  {
+    tableId: z.string().describe("Table id"),
+    maxSeats: z.number().optional().describe("Number of seat slots to inspect (default 8)"),
+  },
+  async (args) => pokerTableStateHandler(args),
+);
+
+server.tool(
+  "poker_tournament_state",
+  "Read tournament state: admin, token, entryFee, min/max/registered players, phase (Draft/Registering/Running/Finalized/Cancelled), roster.",
+  {
+    tournamentId: z.string().describe("Tournament id"),
+  },
+  async (args) => pokerTournamentStateHandler(args),
+);
+
+server.tool(
+  "poker_deal_commit",
+  "Submit commit hash for the N-of-N commit-reveal randomness round. Each seated player calls this with keccak256(seed). Reveal in poker_deal_reveal once all players have committed.",
+  {
+    player: z.string().describe("Player wallet"),
+    tableId: z.string().describe("Table id"),
+    commitHash: z.string().describe("32-byte hex hash = keccak256(seed)"),
+  },
+  async (args) => pokerDealCommitHandler(args),
+);
+
+server.tool(
+  "poker_deal_reveal",
+  "Reveal the seed used in poker_deal_commit. Contract verifies keccak256(seed) == committed hash, then XORs into the shared randomness for the deck shuffle.",
+  {
+    player: z.string().describe("Player wallet"),
+    tableId: z.string().describe("Table id"),
+    seed: z.string().describe("32-byte hex preimage of the previously committed hash"),
+  },
+  async (args) => pokerDealRevealHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
-process.stderr.write("arc-agent-toolkit MCP server starting...\n");
+process.stderr.write("arcent-poker-mcp server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arc-agent-toolkit MCP server connected. 17 tools registered.\n");
+process.stderr.write("arcent-poker-mcp server connected. 27 tools registered (17 base + 10 poker).\n");
