@@ -5,6 +5,16 @@ import { okResult, errorResult, err } from "../errors.js";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
+const PHASE_NAMES = [
+  "WaitingForPlayers",
+  "Preflop",
+  "Flop",
+  "Turn",
+  "River",
+  "Showdown",
+  "Complete",
+] as const;
+
 export async function pokerTableStateHandler(args: {
   tableId: string;
   maxSeats?: number; // default 8
@@ -23,6 +33,19 @@ export async function pokerTableStateHandler(args: {
     folded: boolean;
     active: boolean;
   };
+  type RawTable = {
+    admin: `0x${string}`;
+    maxSeats: number;
+    occupiedCount: number;
+    smallBlind: bigint;
+    bigBlind: bigint;
+    minBuyIn: bigint;
+    maxBuyIn: bigint;
+    dealerButton: number;
+    currentActor: number;
+    handNumber: bigint;
+    phase: number;
+  };
   type SeatCall =
     | { seatIdx: number; ok: true; raw: RawSeat }
     | { seatIdx: number; ok: false };
@@ -39,12 +62,18 @@ export async function pokerTableStateHandler(args: {
       .catch<SeatCall>(() => ({ seatIdx: i, ok: false })),
   );
 
-  const [seats, round] = await Promise.all([
+  const [seats, round, table] = await Promise.all([
     Promise.all(seatCalls),
     arcClient.readContract({
       address: config.pokerBet,
       abi: PokerBetAbi,
       functionName: "getRound",
+      args: [tableId],
+    }).catch(() => null),
+    arcClient.readContract({
+      address: config.pokerTable,
+      abi: PokerTableAbi,
+      functionName: "getTable",
       args: [tableId],
     }).catch(() => null),
   ]);
@@ -62,9 +91,34 @@ export async function pokerTableStateHandler(args: {
       empty: s.raw.player === ZERO_ADDRESS,
     }));
 
+  // Computed pot: sum of all seats' handContribution. Cheaper than calling
+  // BetSystem (and works even before BetSystem state is initialised).
+  const potTotal = occupied
+    .filter((s) => !s.empty)
+    .reduce((acc, s) => acc + BigInt(s.handContribution), 0n)
+    .toString();
+
+  const t = table as RawTable | null;
   return okResult({
     tableId,
+    table: t
+      ? {
+          admin: t.admin,
+          maxSeats: t.maxSeats,
+          occupiedCount: t.occupiedCount,
+          smallBlind: t.smallBlind.toString(),
+          bigBlind: t.bigBlind.toString(),
+          minBuyIn: t.minBuyIn.toString(),
+          maxBuyIn: t.maxBuyIn.toString(),
+          dealerButton: t.dealerButton,
+          currentActor: t.currentActor,
+          handNumber: Number(t.handNumber),
+          phase: t.phase,
+          phaseName: PHASE_NAMES[t.phase] ?? "Unknown",
+        }
+      : null,
     seats: occupied,
+    pot: potTotal,
     round: round
       ? {
           currentPlayerSeat: (round as { currentPlayerSeat: number }).currentPlayerSeat,

@@ -117,6 +117,29 @@ export const PokerTableAbi = [
     outputs: [{ name: "", type: "uint8[]" }],
     stateMutability: "view",
   },
+  {
+    type: "function", name: "getTable",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [
+      {
+        name: "", type: "tuple",
+        components: [
+          { name: "admin", type: "address" },
+          { name: "maxSeats", type: "uint8" },
+          { name: "occupiedCount", type: "uint8" },
+          { name: "smallBlind", type: "uint256" },
+          { name: "bigBlind", type: "uint256" },
+          { name: "minBuyIn", type: "uint256" },
+          { name: "maxBuyIn", type: "uint256" },
+          { name: "dealerButton", type: "uint8" },
+          { name: "currentActor", type: "uint8" },
+          { name: "handNumber", type: "uint64" },
+          { name: "phase", type: "uint8" }, // 0..6 = WaitingForPlayers..Complete
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
 ] as const;
 
 export const PokerBetAbi = [
