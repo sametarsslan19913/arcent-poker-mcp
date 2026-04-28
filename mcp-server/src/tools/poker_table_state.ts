@@ -62,7 +62,7 @@ export async function pokerTableStateHandler(args: {
       .catch<SeatCall>(() => ({ seatIdx: i, ok: false })),
   );
 
-  const [seats, round, table] = await Promise.all([
+  const [seats, round, table, activeSeatList] = await Promise.all([
     Promise.all(seatCalls),
     arcClient.readContract({
       address: config.pokerBet,
@@ -76,6 +76,15 @@ export async function pokerTableStateHandler(args: {
       functionName: "getTable",
       args: [tableId],
     }).catch(() => null),
+    // Canonical "still in the hand" set from the contract: occupied + inHand
+    // + !folded. Cheaper + safer than recomputing from seat snapshots, since
+    // the agent runner uses this to drive its action loop.
+    arcClient.readContract({
+      address: config.pokerTable,
+      abi: PokerTableAbi,
+      functionName: "activeSeats",
+      args: [tableId],
+    }).catch(() => [] as readonly number[]) as Promise<readonly number[]>,
   ]);
 
   const occupied = seats
@@ -118,6 +127,7 @@ export async function pokerTableStateHandler(args: {
         }
       : null,
     seats: occupied,
+    activeSeats: (activeSeatList ?? []).map((idx) => Number(idx)),
     pot: potTotal,
     round: round
       ? {
