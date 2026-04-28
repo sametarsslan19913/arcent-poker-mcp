@@ -126,6 +126,20 @@ export const PokerTableAbi = [
     stateMutability: "view",
   },
   {
+    type: "function", name: "occupiedSeats",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint8[]" }],
+    stateMutability: "view",
+  },
+  {
+    // TableSystem.advancePhase — onlyAuthorizedSystem (admin or pre-authorized).
+    // Returns the new Phase enum (1=Preflop, 2=Flop, 3=Turn, 4=River, 5=Showdown, 6=Complete).
+    type: "function", name: "advancePhase",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "newPhase", type: "uint8" }],
+    stateMutability: "nonpayable",
+  },
+  {
     type: "function", name: "getTable",
     inputs: [{ name: "tableId", type: "bytes32" }],
     outputs: [
@@ -151,6 +165,16 @@ export const PokerTableAbi = [
 ] as const;
 
 export const PokerBetAbi = [
+  {
+    // BetSystem.initRound — onlyAuthorizedSystem. Coordinator calls this after
+    // TableSystem.advancePhase moves the phase to Flop/Turn/River so that
+    // BetSystem resets the round-level RoundState (currentBet=0 postflop, BB
+    // preflop). Without this, `act` reverts with TableNotInitialized.
+    type: "function", name: "initRound",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
   {
     // action enum: 0=Fold, 1=Check, 2=Call, 3=Raise, 4=AllIn
     type: "function", name: "act",
@@ -431,6 +455,54 @@ export const CardRole = {
   Burn: 2,
   Community: 3,
 } as const;
+
+// TableSystem.Phase enum mirror — keep in sync with TableSystem.sol.
+export const TablePhase = {
+  WaitingForPlayers: 0,
+  Preflop: 1,
+  Flop: 2,
+  Turn: 3,
+  River: 4,
+  Showdown: 5,
+  Complete: 6,
+} as const;
+
+export const TablePhaseLabel: Record<number, string> = {
+  0: "WaitingForPlayers",
+  1: "Preflop",
+  2: "Flop",
+  3: "Turn",
+  4: "River",
+  5: "Showdown",
+  6: "Complete",
+};
+
+/**
+ * Texas Hold'em deal layout indices for the next betting round, given the
+ * current phase + occupied-seat count N. Mirrors `_dealRoleOf` in
+ * DecryptSystem.sol — community slots after the hole block start at 2N.
+ *
+ *   Preflop → Flop  : 2N+1, 2N+2, 2N+3   (3 cards, 1 burn skipped at 2N)
+ *   Flop    → Turn  : 2N+5               (1 card, 1 burn skipped at 2N+4)
+ *   Turn    → River : 2N+7               (1 card, 1 burn skipped at 2N+6)
+ *   River   → Showdown: []               (no community reveal pre-showdown)
+ */
+export function communityCardIdxsForNextPhase(currentPhase: number, N: number): number[] {
+  const holeEnd = 2 * N;
+  if (currentPhase === TablePhase.Preflop) return [holeEnd + 1, holeEnd + 2, holeEnd + 3];
+  if (currentPhase === TablePhase.Flop)    return [holeEnd + 5];
+  if (currentPhase === TablePhase.Turn)    return [holeEnd + 7];
+  return [];
+}
+
+export function nextPhaseAfter(currentPhase: number): number {
+  if (currentPhase === TablePhase.Preflop) return TablePhase.Flop;
+  if (currentPhase === TablePhase.Flop)    return TablePhase.Turn;
+  if (currentPhase === TablePhase.Turn)    return TablePhase.River;
+  if (currentPhase === TablePhase.River)   return TablePhase.Showdown;
+  if (currentPhase === TablePhase.Showdown) return TablePhase.Complete;
+  return currentPhase;
+}
 
 // Friendly action label → enum mapping for the unified poker_action tool.
 export const PokerActionEnum = {

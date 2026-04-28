@@ -34,6 +34,8 @@ import { pokerPublishSessionPkHandler } from "./tools/poker_publish_session_pk.j
 import { pokerHandStartHandler } from "./tools/poker_hand_start.js";
 import { pokerDecryptShareHandler } from "./tools/poker_decrypt_share.js";
 import { pokerRecoverCardHandler } from "./tools/poker_recover_card.js";
+import { pokerRoundStatusHandler } from "./tools/poker_round_status.js";
+import { pokerAdvancePhaseHandler } from "./tools/poker_advance_phase.js";
 
 const server = new McpServer({
   name: "arcent-poker-mcp",
@@ -434,10 +436,29 @@ server.tool(
   async (args) => pokerRecoverCardHandler(args),
 );
 
+server.tool(
+  "poker_round_status",
+  "Aggregated read for phase-orchestration decisions: returns table phase + handNumber + currentActor + occupiedSeats roster + BetSystem RoundState (roundComplete, currentBet, lastAggressor) + per-slot decrypt status (threshold/shareCount/revealed) for every community card belonging to the NEXT phase. Sets `readyToAdvance=true` once roundComplete AND every required community card is fully decrypted — i.e. the gate poker_advance_phase enforces. Cheap to call; pure view, no tx encoded.",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+  },
+  async (args) => pokerRoundStatusHandler(args),
+);
+
+server.tool(
+  "poker_advance_phase",
+  "Coordinator-side phase transition. Validates BetSystem.RoundState.roundComplete=true AND that every community card belonging to the next phase is on-chain revealed (DecryptSystem.revealed[cardIdx]=true). Returns one or two unsignedTxs in `unsignedTxs[]` to broadcast in order: TableSystem.advancePhase + (only when transitioning into Flop/Turn/River) BetSystem.initRound. River → Showdown emits only the advancePhase tx (showdown invocation is B3.7.E's job). Showdown / Complete are rejected. Caller must be the table admin or be authorizeSystem'd on TableSystem AND BetSystem. Pass `force: true` to skip the readiness checks (diagnostic / smoke only).",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    force: z.boolean().optional().describe("Skip the roundComplete + community-revealed gate. Default false."),
+  },
+  async (args) => pokerAdvancePhaseHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
 process.stderr.write("arcent-poker-mcp server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arcent-poker-mcp server connected. 30 tools registered (17 base + 13 poker).\n");
+process.stderr.write("arcent-poker-mcp server connected. 32 tools registered (17 base + 15 poker).\n");
