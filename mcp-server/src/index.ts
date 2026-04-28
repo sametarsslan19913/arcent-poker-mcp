@@ -30,6 +30,8 @@ import { pokerTournamentStateHandler } from "./tools/poker_tournament_state.js";
 import { pokerDealCommitHandler } from "./tools/poker_deal_commit.js";
 import { pokerDealRevealHandler } from "./tools/poker_deal_reveal.js";
 import { pokerShuffleProveHandler } from "./tools/poker_shuffle_prove.js";
+import { pokerPublishSessionPkHandler } from "./tools/poker_publish_session_pk.js";
+import { pokerHandStartHandler } from "./tools/poker_hand_start.js";
 
 const server = new McpServer({
   name: "arcent-poker-mcp",
@@ -368,6 +370,27 @@ server.tool(
     seed: z.string().describe("32-byte hex preimage of the previously committed hash"),
   },
   async (args) => pokerDealRevealHandler(args),
+);
+
+server.tool(
+  "poker_publish_session_pk",
+  "Publish your per-hand BabyJubJub session pk_i to DealSystem so the joint pk = Σ pk_i can be assembled (real mental-poker pattern, no single-admin trust). Each seated agent calls this ONCE per hand BEFORE initDeal. The supplied `seed` derives your sk_i locally — keep it: you'll need the same seed in poker_decrypt_share to compute your decrypt share for hole/community cards. Returns the derived pk + an unsignedTx for the agent to broadcast.",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    seed: z.string().describe("256-bit hex seed (your per-hand secret). Pick deterministically (HKDF(walletSk, tableId||handNumber)) or via CSPRNG and store locally for the duration of the hand."),
+  },
+  async (args) => pokerPublishSessionPkHandler(args),
+);
+
+server.tool(
+  "poker_hand_start",
+  "Coordinator-side hand bootstrap. Reads all published session pks from DealSystem, sums them on BabyJubJub off-chain to get the joint pk, builds the canonical initial 52-card deck encrypted under the joint pk, and returns an unsignedTx for DealSystem.initDeal. Set `withStartHand: true` to also receive a TableSystem.startHand unsignedTx (caller must be admin or authorized system on the table). Run AFTER all seated agents have called poker_publish_session_pk for this hand. Other agents will independently re-verify the joint pk before submitting their shuffle.",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    withStartHand: z.boolean().optional().describe("If true, also returns TableSystem.startHand unsignedTx as `unsignedTxStartHand`."),
+    minPks: z.number().int().optional().describe("Minimum number of published pks before assembling joint pk (default 2)."),
+  },
+  async (args) => pokerHandStartHandler(args),
 );
 
 server.tool(

@@ -23,11 +23,53 @@ import {
   buildShuffleWitness,
   csprngRng,
   seededRng,
+  sumBabyJubPoints,
   type Point,
 } from "../zk/shuffle-input.js";
 import { makeShuffleProver, proofToSolidityCalldata } from "../zk/prover.js";
 
 const DECK_SIZE = 52;
+
+/**
+ * Self-verify: independently sum the session pks the contract has on file
+ * for this table and assert it equals the deck's stored joint pk. If not,
+ * the coordinator (or contract) is lying about which pk the deck was sealed
+ * under, and the agent's shuffle proof would re-encrypt under a pk no one
+ * actually controls — bricking the hand and possibly leaking plaintext.
+ *
+ * Returns null on success; non-null reason string on mismatch.
+ */
+async function verifyJointPkAgainstSessionPks(
+  tableId: `0x${string}`,
+  storedPk: Point,
+): Promise<string | null> {
+  const entries = (await arcClient.readContract({
+    address: config.pokerDeal as `0x${string}`,
+    abi: PokerDealAbi,
+    functionName: "getSessionPks",
+    args: [tableId],
+  })) as readonly { agent: `0x${string}`; pkX: bigint; pkY: bigint }[];
+
+  if (entries.length === 0) {
+    // No session pks published — caller is in a B3.6-era pattern where the
+    // joint pk is set directly by initDeal without per-agent attestation.
+    // Treat this as a *hard* trust failure under B3.7+ semantics; smoke tests
+    // that genuinely need single-admin pk should pass `verifyJointPk: false`.
+    return "no session pks published — joint pk has no agent-side attestation";
+  }
+
+  const recomputed = await sumBabyJubPoints(
+    entries.map((e) => [e.pkX, e.pkY] as Point),
+  );
+  if (recomputed[0] !== storedPk[0] || recomputed[1] !== storedPk[1]) {
+    return (
+      `joint pk mismatch — chain says (${storedPk[0]}, ${storedPk[1]}) but Σ ` +
+      `${entries.length} published pk_i = (${recomputed[0]}, ${recomputed[1]}). ` +
+      `Refusing to shuffle under an unattested pk.`
+    );
+  }
+  return null;
+}
 
 async function readDeckFromChain(
   tableId: `0x${string}`,
@@ -73,6 +115,8 @@ export async function pokerShuffleProveHandler(args: {
   tableId: string;
   /** Optional 256-bit hex seed to make the permutation deterministic (smoke tests). */
   seed?: string;
+  /** Default true. Set false only for legacy/B3.6 single-admin smoke tests. */
+  verifyJointPk?: boolean;
 }) {
   const tableId = args.tableId as `0x${string}`;
   if (!tableId || tableId.length !== 66) {
@@ -87,6 +131,21 @@ export async function pokerShuffleProveHandler(args: {
     return errorResult(
       err("E_DEAL_READ", `failed to read DealSystem state: ${(e as Error).message}`),
     );
+  }
+
+  // 1a. Self-verify joint pk (B3.7.B-4 — trust-but-verify).
+  const verify = args.verifyJointPk ?? true;
+  if (verify) {
+    try {
+      const reason = await verifyJointPkAgainstSessionPks(tableId, deck.pk);
+      if (reason) {
+        return errorResult(err("E_JOINT_PK_UNATTESTED", reason));
+      }
+    } catch (e) {
+      return errorResult(
+        err("E_JOINT_PK_CHECK", `joint pk verification failed: ${(e as Error).message}`),
+      );
+    }
   }
 
   // 2-3. Pick randomness, build witness + output ciphertexts.

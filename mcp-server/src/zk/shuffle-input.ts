@@ -165,3 +165,50 @@ export function seededRng(seed: bigint): RNG {
     return state;
   };
 }
+
+/**
+ * Derive a BabyJubJub session keypair from a 256-bit seed.
+ * `sk = seed mod subOrder`, `pk = sk · Base8`.
+ *
+ * Used by poker_publish_session_pk + poker_decrypt_share to:
+ *  - publish pk_i on-chain at hand start (agent self-attestation)
+ *  - compute the agent's per-hand decrypt share d_i = sk_i · c1
+ *
+ * The seed is the *agent's secret*: never sent over the wire, never stored
+ * server-side. Production wallets should derive it via HKDF(walletSk,
+ * tableId || handNumber) so it's reconstructible across MCP restarts but
+ * still indistinguishable from random to anyone without walletSk.
+ */
+export async function deriveSessionKeypair(seed: bigint): Promise<{
+  sk: bigint;
+  pk: Point;
+}> {
+  const bj = await buildBabyjub();
+  const sk = ((seed % SUB_ORDER) + SUB_ORDER) % SUB_ORDER;
+  if (sk === 0n) {
+    // pk = 0·G = identity, useless as a session pk. Reject so the agent picks
+    // a non-trivial seed (vanishingly rare with a CSPRNG).
+    throw new Error("session sk reduces to 0 — pick a different seed");
+  }
+  const pkPoint = bj.mulPointEscalar(bj.Base8, sk) as [Uint8Array, Uint8Array];
+  return {
+    sk,
+    pk: [BigInt(bj.F.toString(pkPoint[0])), BigInt(bj.F.toString(pkPoint[1]))],
+  };
+}
+
+/**
+ * Sum a list of BabyJubJub points (off-chain joint pk aggregation).
+ * Returns the identity (0, 1) for an empty list — agents should treat this as
+ * "no published pks yet" and refuse to trust the deck.
+ */
+export async function sumBabyJubPoints(points: Point[]): Promise<Point> {
+  const bj = await buildBabyjub();
+  // BabyJub identity in Edwards form is (0, 1).
+  let acc: [Uint8Array, Uint8Array] = [bj.F.e(0n), bj.F.e(1n)];
+  for (const p of points) {
+    const pf: [Uint8Array, Uint8Array] = [bj.F.e(p[0]), bj.F.e(p[1])];
+    acc = bj.addPoint(acc, pf) as [Uint8Array, Uint8Array];
+  }
+  return [BigInt(bj.F.toString(acc[0])), BigInt(bj.F.toString(acc[1]))];
+}

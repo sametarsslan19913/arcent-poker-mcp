@@ -273,6 +273,52 @@ export const PokerDealAbi = [
     outputs: [{ name: "", type: "uint32" }],
     stateMutability: "view",
   },
+  // B3.7.B: per-hand session pk audit trail (real mental poker — joint pk =
+  // Σ pk_i, not single-admin). Each agent calls publishSessionPk before
+  // initDeal; coordinator reads getSessionPks, sums them off-chain, feeds the
+  // result into initDeal. Other agents re-sum and verify against deckPk
+  // before submitting their shuffle round (trust-but-verify, no on-chain
+  // BabyJub aggregation).
+  {
+    type: "function", name: "publishSessionPk",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "pkX", type: "uint256" },
+      { name: "pkY", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "getSessionPks",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [
+      {
+        name: "", type: "tuple[]",
+        components: [
+          { name: "agent", type: "address" },
+          { name: "pkX",   type: "uint256" },
+          { name: "pkY",   type: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "sessionPkCount",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "hasPublishedSessionPk",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "agent", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
   // -- legacy placeholders (see NOTE above) --
   {
     type: "function", name: "commit",
