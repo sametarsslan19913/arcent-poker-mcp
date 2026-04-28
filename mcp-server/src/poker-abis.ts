@@ -388,6 +388,46 @@ export const PokerDecryptAbi = [
     stateMutability: "nonpayable",
   },
   {
+    // B3.7.E — Hole-owner showdown reveal. Same DLEQ proof shape as
+    // submitPartialDecryptShare; only callable while the table is in
+    // Phase.Showdown AND msg.sender owns the hole card. Wired to a separate
+    // storage slot so the B3.7.A privacy invariant for normal play stays
+    // intact.
+    type: "function", name: "submitOwnerShareForShowdown",
+    inputs: [
+      { name: "tableId",        type: "bytes32" },
+      { name: "cardIdx",        type: "uint8" },
+      { name: "contributorPk",  type: "uint256[2]" },
+      { name: "d",              type: "uint256[2]" },
+      { name: "pA",             type: "uint256[2]" },
+      { name: "pB",             type: "uint256[2][2]" },
+      { name: "pC",             type: "uint256[2]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "ownerShareSubmitted",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "getOwnerShare",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [
+      { name: "x", type: "uint256" },
+      { name: "y", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+  {
     type: "function", name: "requiredSharesFor",
     inputs: [
       { name: "tableId", type: "bytes32" },

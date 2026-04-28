@@ -415,12 +415,13 @@ server.tool(
 
 server.tool(
   "poker_decrypt_share",
-  "Compute and submit your partial decryption share for one card. Pass the SAME `seed` you used in poker_publish_session_pk earlier this hand (so the derived sk_i matches the published pk_i). The tool reads (c1, c2) from DealSystem, computes d = sk_i · c1 on BabyJubJub, generates a Groth16 DLEQ proof binding (pk_i, c1, d), and returns an unsignedTx for DecryptSystem.submitPartialDecryptShare. Hole-card owners must NOT call this for their own card — submission would revert (HoleOwnerCannotSubmit). Burn / unused slots are also rejected. Once threshold (N-1 hole, N community) is met, RevealReady fires; use poker_recover_card to assemble the plaintext.",
+  "Compute and submit your partial decryption share for one card. Pass the SAME `seed` you used in poker_publish_session_pk earlier this hand (so the derived sk_i matches the published pk_i). The tool reads (c1, c2) from DealSystem, computes d = sk_i · c1 on BabyJubJub, generates a Groth16 DLEQ proof binding (pk_i, c1, d), and returns an unsignedTx for DecryptSystem.submitPartialDecryptShare. Hole-card owners must NOT call this for their own card during normal play — submission would revert (HoleOwnerCannotSubmit). Burn / unused slots are also rejected. Once threshold (N-1 hole, N community) is met, RevealReady fires; use poker_recover_card to assemble the plaintext. SHOWDOWN MODE — pass `forShowdown: true` (only valid while table is in Phase.Showdown) to route the share to DecryptSystem.submitOwnerShareForShowdown so the owner can reveal their own card on-chain for ShowdownInvoker.",
   {
     tableId: z.string().describe("32-byte hex tableId"),
     cardIdx: z.number().int().describe("Deck slot 0..51"),
     seed: z.string().describe("256-bit hex seed — the same value passed to poker_publish_session_pk this hand"),
     agentAddress: z.string().optional().describe("Optional agent wallet address — used only for an early local hole-owner check (the contract enforces it regardless)."),
+    forShowdown: z.boolean().optional().describe("Owner showdown reveal — routes to submitOwnerShareForShowdown and bypasses the hole-owner short-circuit. Only valid during Phase.Showdown; default false."),
   },
   async (args) => pokerDecryptShareHandler(args),
 );

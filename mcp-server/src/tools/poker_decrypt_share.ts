@@ -40,6 +40,10 @@ export async function pokerDecryptShareHandler(args: {
   seed: string;
   /** Optional override — agent's wallet address (for off-chain hole-owner check). */
   agentAddress?: string;
+  /** B3.7.E — when true, the hole-owner submits their own share via
+   *  DecryptSystem.submitOwnerShareForShowdown (only valid in Phase.Showdown).
+   *  Bypasses the E_HOLE_OWNER client-side short-circuit. Default false. */
+  forShowdown?: boolean;
 }) {
   const tableId = args.tableId as `0x${string}`;
   if (!tableId || tableId.length !== 66 || !tableId.startsWith("0x")) {
@@ -79,8 +83,9 @@ export async function pokerDecryptShareHandler(args: {
   }
 
   // 0b. Hole-owner block. Surfaced early when the caller passes their address;
-  //     otherwise we rely on the contract revert.
-  if (args.agentAddress && role === CardRole.Hole) {
+  //     otherwise we rely on the contract revert.  In showdown mode we DO
+  //     want the hole-owner to submit (B3.7.E), so the block is suppressed.
+  if (!args.forShowdown && args.agentAddress && role === CardRole.Hole) {
     try {
       const owner = (await arcClient.readContract({
         address: config.pokerDecrypt as `0x${string}`,
@@ -171,10 +176,15 @@ export async function pokerDecryptShareHandler(args: {
 
   const calldata = proofToSolidityCalldata(proof.proof);
 
-  // 5. Encode submitPartialDecryptShare unsignedTx.
+  // 5. Encode unsignedTx — owner showdown submission goes to a different
+  //    endpoint that pierces the hole-owner block (only callable while the
+  //    table is in Phase.Showdown; contract enforces).
+  const fnName = args.forShowdown
+    ? "submitOwnerShareForShowdown"
+    : "submitPartialDecryptShare";
   const data = encodeFunctionData({
     abi: PokerDecryptAbi,
-    functionName: "submitPartialDecryptShare",
+    functionName: fnName,
     args: [
       tableId,
       cardIdx,
