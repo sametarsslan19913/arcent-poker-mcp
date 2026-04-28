@@ -318,19 +318,19 @@ server.tool(
 
 server.tool(
   "poker_action",
-  "Submit a betting action: fold, check, call, raise, or allin. amount is the chips contribution this turn (required for call/raise; must be 0 for fold/check/allin).",
+  "Submit a betting action: fold, check, call, raise, or allin. For raise, amount is the new ABSOLUTE round-level high bet target. For fold/check/call/allin amount must be 0 — the contract derives the call amount from RoundState.currentBet - your seat.currentBet.",
   {
-    player: z.string().describe("Player wallet (must match the seat's player and the round's currentPlayerSeat)"),
+    player: z.string().describe("Player wallet (must match the seat's player at TableSystem.currentActor)"),
     tableId: z.string().describe("Table id"),
     action: z.enum(["fold", "check", "call", "raise", "allin"]).describe("Action label"),
-    amount: z.string().optional().describe("Chips amount as numeric string. Required for call/raise; ignored for fold/check/allin."),
+    amount: z.string().optional().describe("Numeric string. Required (>0) for raise = new ABSOLUTE round high bet target. Must be 0 (or omitted) for fold/check/call/allin."),
   },
   async (args) => pokerActionHandler(args),
 );
 
 server.tool(
   "poker_table_state",
-  "Read live table state: seats (player, agentId, chips, contributions, folded), current round (currentPlayerSeat, highBet, minRaiseAmount, roundComplete).",
+  "Read live table state: seats (player, agentId, chips, contributions, folded), table (currentActor, phaseName, handNumber, blinds), activeSeats (kanonik in-hand non-folded seat list), round (currentPlayerSeat = TableSystem.currentActor, highBet = RoundState.currentBet, minRaiseAmount = RoundState.minRaise, roundComplete, lastAggressor, actedBitmap).",
   {
     tableId: z.string().describe("Table id"),
     maxSeats: z.number().optional().describe("Number of seat slots to inspect (default 8)"),

@@ -33,15 +33,18 @@ export async function pokerActionHandler(args: {
   }
   if (amount < 0n) return errorResult(err("E_NEGATIVE_AMOUNT", "amount cannot be negative"));
 
-  // BetSystem semantic: amount is the chips contribution this turn.
-  //   fold/check/allin: ignored (pass 0)
-  //   call: total contribution to match the high bet
-  //   raise: total contribution including the raise increment
-  if ((label === "fold" || label === "check" || label === "allin") && amount !== 0n) {
-    return errorResult(err("E_AMOUNT_NOT_ALLOWED", `${label} requires amount=0`));
+  // BetSystem.act semantics (BetSystem.sol):
+  //   fold/check/call/allin: amount IGNORED on-chain. We require 0 in the
+  //     unsigned tx so a misleading non-zero is never broadcast. Call need is
+  //     computed by the contract from RoundState.currentBet - seat.currentBet.
+  //   raise: amount is the new ABSOLUTE round-level high bet target (the new
+  //     RoundState.currentBet). Contract derives `paid = amount - seat.currentBet`
+  //     and enforces `amount - r.currentBet >= r.minRaise`.
+  if ((label === "fold" || label === "check" || label === "call" || label === "allin") && amount !== 0n) {
+    return errorResult(err("E_AMOUNT_NOT_ALLOWED", `${label} requires amount=0 (BetSystem ignores it on-chain)`));
   }
-  if ((label === "call" || label === "raise") && amount === 0n) {
-    return errorResult(err("E_ZERO_AMOUNT", `${label} requires amount > 0`));
+  if (label === "raise" && amount === 0n) {
+    return errorResult(err("E_ZERO_AMOUNT", "raise requires amount > 0 (absolute new high-bet target)"));
   }
 
   const data = encodeFunctionData({
@@ -62,6 +65,6 @@ export async function pokerActionHandler(args: {
     action: label,
     actionEnum: enumValue,
     amount: amount.toString(),
-    note: "Player signs. BetSystem validates the action against the current round + seat.",
+    note: "Player signs. BetSystem validates the action against the current round + seat. For raise, amount is the new absolute round-level high bet target.",
   });
 }

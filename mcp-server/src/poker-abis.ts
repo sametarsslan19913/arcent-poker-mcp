@@ -91,6 +91,11 @@ export const PokerTableAbi = [
     stateMutability: "nonpayable",
   },
   {
+    // Full Seat struct from TableSystem.sol — field NAMES are advisory but
+    // ORDER + TYPES are load-bearing for ABI decoding. Previous shorter shape
+    // collapsed `occupied`/`inHand`/`folded` into `handContribution`/`folded`/
+    // `active` and dropped `allIn` + `currentBet`, so seat.folded actually
+    // returned seat.inHand. Action-loop fold detection broke silently.
     type: "function", name: "getSeat",
     inputs: [
       { name: "tableId", type: "bytes32" },
@@ -100,12 +105,15 @@ export const PokerTableAbi = [
       {
         name: "", type: "tuple",
         components: [
-          { name: "player", type: "address" },
-          { name: "agentId", type: "bytes32" },
-          { name: "chips", type: "uint256" },
-          { name: "handContribution", type: "uint256" },
-          { name: "folded", type: "bool" },
-          { name: "active", type: "bool" },
+          { name: "player",            type: "address" },
+          { name: "agentId",           type: "bytes32" },
+          { name: "chips",             type: "uint256" },
+          { name: "occupied",          type: "bool"    },
+          { name: "inHand",            type: "bool"    },
+          { name: "folded",            type: "bool"    },
+          { name: "allIn",             type: "bool"    },
+          { name: "currentBet",        type: "uint256" },
+          { name: "handContribution",  type: "uint256" },
         ],
       },
     ],
@@ -155,16 +163,19 @@ export const PokerBetAbi = [
     stateMutability: "nonpayable",
   },
   {
+    // RoundState as declared in BetSystem.sol (field order + types are
+    // load-bearing for ABI decoding — field NAMES are advisory).
     type: "function", name: "getRound",
     inputs: [{ name: "tableId", type: "bytes32" }],
     outputs: [
       {
         name: "", type: "tuple",
         components: [
-          { name: "currentPlayerSeat", type: "uint8" },
-          { name: "minRaiseAmount", type: "uint256" },
-          { name: "lastRaiseAmount", type: "uint256" },
-          { name: "highBet", type: "uint256" },
+          { name: "handNumber", type: "uint64" },
+          { name: "currentBet", type: "uint256" },     // round-level high bet
+          { name: "minRaise", type: "uint256" },       // minimum raise increment
+          { name: "lastAggressor", type: "uint8" },    // 0xFF if none
+          { name: "actedBitmap", type: "uint16" },
           { name: "roundComplete", type: "bool" },
         ],
       },
@@ -172,11 +183,9 @@ export const PokerBetAbi = [
     stateMutability: "view",
   },
   {
+    // BetSystem.toCall(tableId) uses Table.currentActor internally; no seat arg.
     type: "function", name: "toCall",
-    inputs: [
-      { name: "tableId", type: "bytes32" },
-      { name: "seatIdx", type: "uint8" },
-    ],
+    inputs: [{ name: "tableId", type: "bytes32" }],
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
   },

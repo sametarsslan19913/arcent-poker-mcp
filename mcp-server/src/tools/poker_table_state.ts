@@ -29,9 +29,12 @@ export async function pokerTableStateHandler(args: {
     player: `0x${string}`;
     agentId: `0x${string}`;
     chips: bigint;
-    handContribution: bigint;
+    occupied: boolean;
+    inHand: boolean;
     folded: boolean;
-    active: boolean;
+    allIn: boolean;
+    currentBet: bigint;
+    handContribution: bigint;
   };
   type RawTable = {
     admin: `0x${string}`;
@@ -94,9 +97,12 @@ export async function pokerTableStateHandler(args: {
       player: s.raw.player,
       agentId: BigInt(s.raw.agentId).toString(),
       chips: s.raw.chips.toString(),
-      handContribution: s.raw.handContribution.toString(),
+      occupied: s.raw.occupied,
+      inHand: s.raw.inHand,
       folded: s.raw.folded,
-      active: s.raw.active,
+      allIn: s.raw.allIn,
+      currentBet: s.raw.currentBet.toString(),
+      handContribution: s.raw.handContribution.toString(),
       empty: s.raw.player === ZERO_ADDRESS,
     }));
 
@@ -129,12 +135,18 @@ export async function pokerTableStateHandler(args: {
     seats: occupied,
     activeSeats: (activeSeatList ?? []).map((idx) => Number(idx)),
     pot: potTotal,
+    // BetSystem.RoundState does not track currentPlayerSeat — that lives on
+    // TableSystem.Table.currentActor (sole source of truth used by BetSystem.act
+    // for seat dispatch). We surface it here under the name the agent runner
+    // already reads to keep the orchestrator API stable.
     round: round
       ? {
-          currentPlayerSeat: (round as { currentPlayerSeat: number }).currentPlayerSeat,
-          highBet: (round as { highBet: bigint }).highBet.toString(),
-          minRaiseAmount: (round as { minRaiseAmount: bigint }).minRaiseAmount.toString(),
-          lastRaiseAmount: (round as { lastRaiseAmount: bigint }).lastRaiseAmount.toString(),
+          currentPlayerSeat: t?.currentActor ?? 0xff,
+          handNumber: Number((round as { handNumber: bigint }).handNumber),
+          highBet: (round as { currentBet: bigint }).currentBet.toString(),
+          minRaiseAmount: (round as { minRaise: bigint }).minRaise.toString(),
+          lastAggressor: (round as { lastAggressor: number }).lastAggressor,
+          actedBitmap: (round as { actedBitmap: number }).actedBitmap,
           roundComplete: (round as { roundComplete: boolean }).roundComplete,
         }
       : null,
