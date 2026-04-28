@@ -191,7 +191,89 @@ export const PokerBetAbi = [
   },
 ] as const;
 
+// NOTE (2026-04-28, B3.6): the commit/reveal entries below are placeholders that
+// historically pointed at RandomnessSystem (which is what poker_deal_commit /
+// poker_deal_reveal actually need to call). Real DealSystem entries are
+// initDeal + submitShuffle (used by poker_shuffle_prove). The commit/reveal
+// pair is left in place to keep poker_deal_commit/_reveal compiling — those
+// tools should be retargeted to RandomnessSystem in a follow-up (their `reveal`
+// signature is also wrong: real RandomnessSystem.reveal takes (roundId, seed,
+// salt), not (tableId, seed)). Tracked as a B3.7 cleanup.
 export const PokerDealAbi = [
+  // DealSystem.initDeal — seed table deck with joint pk + initial ciphertexts.
+  // Called once per hand by the table admin (or first agent) before sequential
+  // shuffle proofs start. Subsequent submitShuffle calls chain the deck state.
+  {
+    type: "function", name: "initDeal",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "pk", type: "uint256[2]" },
+      { name: "initialC1", type: "uint256[2][52]" },
+      { name: "initialC2", type: "uint256[2][52]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  // DealSystem.submitShuffle — agent submits one re-encrypted permutation
+  // round + Groth16 proof (verified on-chain by ShuffleEncrypt52Verifier).
+  // Public signal layout (418):
+  //   [0..1]      pk
+  //   [2..105]    inputC1[52]   (current on-chain deck state)
+  //   [106..209]  inputC2[52]
+  //   [210..313]  outputC1[52]  (this submission's output)
+  //   [314..417]  outputC2[52]
+  // The contract reconstructs sig[] from stored deck + submitted output, so
+  // the agent only sends output ciphertexts + (pA, pB, pC).
+  {
+    type: "function", name: "submitShuffle",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "outputC1", type: "uint256[2][52]" },
+      { name: "outputC2", type: "uint256[2][52]" },
+      { name: "pA", type: "uint256[2]" },
+      { name: "pB", type: "uint256[2][2]" },
+      { name: "pC", type: "uint256[2]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  // Views — mostly used by poker_shuffle_prove to read the current deck state.
+  {
+    type: "function", name: "isInitialized",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "deckPk",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [
+      { name: "x", type: "uint256" },
+      { name: "y", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "cardCiphertext",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [
+      { name: "c1x", type: "uint256" },
+      { name: "c1y", type: "uint256" },
+      { name: "c2x", type: "uint256" },
+      { name: "c2y", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "shuffleRound",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint32" }],
+    stateMutability: "view",
+  },
+  // -- legacy placeholders (see NOTE above) --
   {
     type: "function", name: "commit",
     inputs: [

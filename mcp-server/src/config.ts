@@ -38,4 +38,17 @@ export const config = {
   pokerDeal:         env("POKER_DEAL_SYSTEM",  "0xc69a40C24ec71eC321190957e98db9F7f3737532") as `0x${string}`,
   pokerDecrypt:      env("POKER_DECRYPT_SYSTEM", "0x24607f3BA930C657837a3B1CCA8BAbb69238fc8D") as `0x${string}`,
   pokerRandomness:   env("POKER_RANDOMNESS_SYSTEM", "0x06763877A3269aD32b28F1238EcF012c0Bb73d54") as `0x${string}`,
+
+  // ZK shuffle artifacts (B3.6). N=52 deck, snarkjs Groth16 production verifier.
+  // Prover backend swappable: "snarkjs" (default, JS, ~20 s/proof) or "rapidsnark" (B3.6.5, C++ native, ~3-4 s/proof).
+  // Same zkey + wasm work for both backends — only the prove call differs.
+  zkShuffleZkey: env(
+    "ZK_SHUFFLE_ZKEY",
+    "/home/vpsadmin/arcent-poker/packages/circuits/build/shuffle_encrypt_n52_final.zkey",
+  ),
+  zkShuffleWasm: env(
+    "ZK_SHUFFLE_WASM",
+    "/home/vpsadmin/arcent-poker/packages/circuits/build/shuffle_encrypt_n52_js/shuffle_encrypt_n52.wasm",
+  ),
+  zkProverBackend: env("ZK_PROVER_BACKEND", "snarkjs"),
 } as const;

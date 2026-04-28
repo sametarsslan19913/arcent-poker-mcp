@@ -49,7 +49,11 @@ export async function swapHandler(args: {
     const kit = new SwapKit();
 
     const result = await kit.swap({
-      from: { adapter, chain: "Arc_Testnet" },
+      // 2026-04-28: SwapKit + ViemAdapter ActionKeys cross-package mismatch
+      // surfaced after a fresh pnpm install resolved Circle SDKs to slightly
+      // different transitive versions. swap is unused by the poker flows;
+      // tracked for cleanup alongside pnpm-lock.yaml commit.
+      from: { adapter, chain: "Arc_Testnet" } as never,
       tokenIn,
       tokenOut,
       amountIn: args.amountIn,

@@ -29,6 +29,7 @@ import { pokerTableStateHandler } from "./tools/poker_table_state.js";
 import { pokerTournamentStateHandler } from "./tools/poker_tournament_state.js";
 import { pokerDealCommitHandler } from "./tools/poker_deal_commit.js";
 import { pokerDealRevealHandler } from "./tools/poker_deal_reveal.js";
+import { pokerShuffleProveHandler } from "./tools/poker_shuffle_prove.js";
 
 const server = new McpServer({
   name: "arcent-poker-mcp",
@@ -369,10 +370,26 @@ server.tool(
   async (args) => pokerDealRevealHandler(args),
 );
 
+server.tool(
+  "poker_shuffle_prove",
+  // Tool description tells the LLM brain when to use this; semantics matter.
+  "Generate the agent's encrypted shuffle proof for the current hand. Reads on-chain deck state from DealSystem, picks fresh randomness (permutation σ + per-card r[]), computes re-encrypted output ciphertexts, runs Groth16 proof (snarkjs ~20 s — slow), and returns an unsignedTx that the agent must broadcast. Each agent calls this once per hand in the seating order; the chain advances the deck after each accepted submitShuffle. Call ONLY when it is your turn in the shuffle round and DealSystem.shuffleRound matches your expected order. Optional `seed` makes the proof deterministic (smoke tests only — production must omit for CSPRNG).",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    seed: z
+      .string()
+      .optional()
+      .describe(
+        "Optional 256-bit hex seed for deterministic permutation. OMIT in production — CSPRNG is used by default.",
+      ),
+  },
+  async (args) => pokerShuffleProveHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
 process.stderr.write("arcent-poker-mcp server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arcent-poker-mcp server connected. 27 tools registered (17 base + 10 poker).\n");
+process.stderr.write("arcent-poker-mcp server connected. 28 tools registered (17 base + 11 poker).\n");
