@@ -51,4 +51,8 @@ export const config = {
     "/home/vpsadmin/arcent-poker/packages/circuits/build/shuffle_encrypt_n52_js/shuffle_encrypt_n52.wasm",
   ),
   zkProverBackend: env("ZK_PROVER_BACKEND", "snarkjs"),
+  // Rapidsnark binary path. Built once on the VPS via `make host` in the
+  // rapidsnark repo; output lands at <repo>/package/bin/prover. Override with
+  // ZK_RAPIDSNARK_BIN when using a system-wide install or symlink.
+  zkRapidsnarkBin: env("ZK_RAPIDSNARK_BIN", "/home/vpsadmin/rapidsnark/package/bin/prover"),
 } as const;

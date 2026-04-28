@@ -10,6 +10,10 @@
 
 import { config } from "../config.js";
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 export type Groth16Proof = {
   pi_a: string[];      // [a0, a1, "1"]
@@ -84,16 +88,84 @@ class SnarkjsShuffleProver implements ShuffleProver {
   }
 }
 
+// rapidsnark binary is invoked as:
+//   prover <zkey> <wtns> <proof.json> <public.json>
+// Witness is generated separately via snarkjs.wtns.calculate (writes the .wtns
+// file). Same zkey works for both backends; only the prove step is native.
+class RapidsnarkShuffleProver implements ShuffleProver {
+  readonly backend = "rapidsnark";
+  constructor(
+    private wasmPath: string,
+    private zkeyPath: string,
+    private binaryPath: string,
+  ) {}
+
+  async prove(witnessInput: object): Promise<ProveResult> {
+    const snarkjs = getSnarkjs();
+    const dir = await mkdtemp(path.join(tmpdir(), "rapidsnark-"));
+    const wtnsPath = path.join(dir, "witness.wtns");
+    const proofPath = path.join(dir, "proof.json");
+    const publicPath = path.join(dir, "public.json");
+
+    try {
+      const t0 = performance.now();
+      await snarkjs.wtns.calculate(witnessInput, this.wasmPath, wtnsPath);
+      const t1 = performance.now();
+      await execRapidsnark(this.binaryPath, this.zkeyPath, wtnsPath, proofPath, publicPath);
+      const t2 = performance.now();
+
+      const proof = JSON.parse(await readFile(proofPath, "utf-8"));
+      const publicSignals = JSON.parse(await readFile(publicPath, "utf-8"));
+
+      return {
+        proof: proof as Groth16Proof,
+        publicSignals: publicSignals as string[],
+        timings: {
+          witnessMs: t1 - t0,
+          proveMs: t2 - t1,
+          totalMs: t2 - t0,
+        },
+      };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+}
+
+function execRapidsnark(
+  bin: string,
+  zkey: string,
+  wtns: string,
+  proof: string,
+  pub: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, [zkey, wtns, proof, pub], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    // Capture stderr for diagnostics; rapidsnark prints proof timing to stdout
+    // which we don't need (we measure wall-clock from JS side anyway).
+    let stderr = "";
+    child.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`rapidsnark exited with code ${code}: ${stderr.trim()}`));
+    });
+  });
+}
+
 export function makeShuffleProver(): ShuffleProver {
   switch (config.zkProverBackend) {
     case "snarkjs":
       return new SnarkjsShuffleProver(config.zkShuffleWasm, config.zkShuffleZkey);
     case "rapidsnark":
-      // B3.6.5 — drop in a child-process wrapper around the rapidsnark binary,
-      // reading the same wasm/zkey + writing witness via snarkjs WitnessCalculator.
-      throw new Error(
-        "rapidsnark backend not yet implemented (planned for B3.6.5). " +
-          "Set ZK_PROVER_BACKEND=snarkjs.",
+      return new RapidsnarkShuffleProver(
+        config.zkShuffleWasm,
+        config.zkShuffleZkey,
+        config.zkRapidsnarkBin,
       );
     default:
       throw new Error(`Unknown ZK_PROVER_BACKEND: ${config.zkProverBackend}`);
