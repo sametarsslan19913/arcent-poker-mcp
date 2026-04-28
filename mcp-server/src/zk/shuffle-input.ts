@@ -212,3 +212,120 @@ export async function sumBabyJubPoints(points: Point[]): Promise<Point> {
   }
   return [BigInt(bj.F.toString(acc[0])), BigInt(bj.F.toString(acc[1]))];
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// B3.7.C — partial-decrypt + plaintext recovery on BabyJubJub.
+// Mirrors the elgamal_decrypt circuit's math so off-chain agents can compute
+// d_i = sk_i · c1 themselves (and verify reveal m = c2 - Σ d_i).
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Variable-base scalar mul on BabyJub: returns scalar · point. */
+export async function mulPointBabyJub(point: Point, scalar: bigint): Promise<Point> {
+  const bj = await buildBabyjub();
+  const k = ((scalar % SUB_ORDER) + SUB_ORDER) % SUB_ORDER;
+  const pf: [Uint8Array, Uint8Array] = [bj.F.e(point[0]), bj.F.e(point[1])];
+  const out = bj.mulPointEscalar(pf, k) as [Uint8Array, Uint8Array];
+  return [BigInt(bj.F.toString(out[0])), BigInt(bj.F.toString(out[1]))];
+}
+
+/**
+ * BabyJub Edwards-curve negation: −(x, y) = (−x mod p, y).
+ * Field p is the BN254 scalar field — bj.F.neg handles the modular reduction.
+ */
+export async function negPoint(p: Point): Promise<Point> {
+  const bj = await buildBabyjub();
+  const xF = bj.F.e(p[0]);
+  const yF = bj.F.e(p[1]);
+  const negX = bj.F.neg(xF);
+  return [BigInt(bj.F.toString(negX)), BigInt(bj.F.toString(yF))];
+}
+
+/** a − b on BabyJub. */
+export async function subBabyJubPoints(a: Point, b: Point): Promise<Point> {
+  const nb = await negPoint(b);
+  return sumBabyJubPoints([a, nb]);
+}
+
+/**
+ * Recover plaintext point m = c2 − Σ shares.
+ * Caller passes every d_i for the card (including the hole-owner's
+ * privately-computed share when applicable). DecryptSystem stores 0-points
+ * for un-submitted slots — drop those before calling.
+ */
+export async function recoverPlaintext(c2: Point, shares: Point[]): Promise<Point> {
+  const sumShares = await sumBabyJubPoints(shares);
+  return subBabyJubPoints(c2, sumShares);
+}
+
+/**
+ * Build the canonical plaintext lookup table m_k = k · G for k = 1..52.
+ * Cached after first call (52 fixed points, deterministic, ~10 ms cold).
+ *
+ * The initial deck (poker_hand_start.buildInitialDeck) encodes card identity
+ * k ∈ {1..52} as plaintext m_k = k · G. After arbitrary shuffles + re-encrypts,
+ * a slot's recovered plaintext is still some m_k — we just don't know which k
+ * without this table.
+ */
+let cachedDeckTable: ReadonlyArray<Point> | null = null;
+export async function deckPlaintextTable(): Promise<ReadonlyArray<Point>> {
+  if (cachedDeckTable) return cachedDeckTable;
+  const bj = await buildBabyjub();
+  const G = bj.Base8;
+  const tbl: Point[] = [];
+  for (let k = 1; k <= 52; k++) {
+    const pf = bj.mulPointEscalar(G, BigInt(k)) as [Uint8Array, Uint8Array];
+    tbl.push([BigInt(bj.F.toString(pf[0])), BigInt(bj.F.toString(pf[1]))]);
+  }
+  cachedDeckTable = tbl;
+  return tbl;
+}
+
+/**
+ * Card identity (1..52) for a recovered plaintext point. Returns 0 if the
+ * point doesn't match any canonical m_k (corruption / wrong joint pk).
+ */
+export async function cardIdentityFromPlaintext(m: Point): Promise<number> {
+  const tbl = await deckPlaintextTable();
+  for (let i = 0; i < tbl.length; i++) {
+    if (tbl[i][0] === m[0] && tbl[i][1] === m[1]) return i + 1;
+  }
+  return 0;
+}
+
+/**
+ * Decode a 1..52 card identity into (suit, rank). Convention is the same one
+ * DealSystem documents:
+ *   identity-1 (0..51) → suit = floor(idx/13)  (0..3)
+ *                       rank = idx % 13 + 2   (2..14, 14 = Ace)
+ *
+ * Suit names are advisory — HandEval doesn't care about labels, only ordering.
+ */
+export type CardLabel = {
+  identity: number;        // 1..52
+  suit: 0 | 1 | 2 | 3;
+  suitName: "clubs" | "diamonds" | "hearts" | "spades";
+  rank: number;            // 2..14
+  rankName: string;        // "2".."10","J","Q","K","A"
+  short: string;           // e.g. "Ah", "Td"
+};
+
+const SUIT_NAMES = ["clubs", "diamonds", "hearts", "spades"] as const;
+const SUIT_SHORT = ["c", "d", "h", "s"] as const;
+const RANK_NAMES = [
+  "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A",
+] as const;
+
+export function decodeCardIdentity(identity: number): CardLabel | null {
+  if (identity < 1 || identity > 52) return null;
+  const idx = identity - 1;
+  const suit = Math.floor(idx / 13) as 0 | 1 | 2 | 3;
+  const rank = (idx % 13) + 2;
+  return {
+    identity,
+    suit,
+    suitName: SUIT_NAMES[suit],
+    rank,
+    rankName: RANK_NAMES[rank - 2],
+    short: `${RANK_NAMES[rank - 2]}${SUIT_SHORT[suit]}`,
+  };
+}

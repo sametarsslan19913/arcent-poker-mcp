@@ -55,4 +55,17 @@ export const config = {
   // rapidsnark repo; output lands at <repo>/package/bin/prover. Override with
   // ZK_RAPIDSNARK_BIN when using a system-wide install or symlink.
   zkRapidsnarkBin: env("ZK_RAPIDSNARK_BIN", "/home/vpsadmin/rapidsnark/package/bin/prover"),
+
+  // ZK decrypt artifacts (B3.7.C). elgamal_decrypt.circom — proves d = sk·c1
+  // and pk = sk·G for a single share. Public signals (6): pk[2] + c1[2] + d[2].
+  // Same prover backends (snarkjs / rapidsnark) work; circuit is small (~10K
+  // constraints) so prove time is sub-second on either backend.
+  zkDecryptZkey: env(
+    "ZK_DECRYPT_ZKEY",
+    "/home/vpsadmin/arcent-poker/packages/circuits/build/elgamal_decrypt_final.zkey",
+  ),
+  zkDecryptWasm: env(
+    "ZK_DECRYPT_WASM",
+    "/home/vpsadmin/arcent-poker/packages/circuits/build/elgamal_decrypt_js/elgamal_decrypt.wasm",
+  ),
 } as const;

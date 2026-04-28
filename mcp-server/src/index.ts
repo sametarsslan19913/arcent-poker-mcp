@@ -32,6 +32,8 @@ import { pokerDealRevealHandler } from "./tools/poker_deal_reveal.js";
 import { pokerShuffleProveHandler } from "./tools/poker_shuffle_prove.js";
 import { pokerPublishSessionPkHandler } from "./tools/poker_publish_session_pk.js";
 import { pokerHandStartHandler } from "./tools/poker_hand_start.js";
+import { pokerDecryptShareHandler } from "./tools/poker_decrypt_share.js";
+import { pokerRecoverCardHandler } from "./tools/poker_recover_card.js";
 
 const server = new McpServer({
   name: "arcent-poker-mcp",
@@ -409,10 +411,33 @@ server.tool(
   async (args) => pokerShuffleProveHandler(args),
 );
 
+server.tool(
+  "poker_decrypt_share",
+  "Compute and submit your partial decryption share for one card. Pass the SAME `seed` you used in poker_publish_session_pk earlier this hand (so the derived sk_i matches the published pk_i). The tool reads (c1, c2) from DealSystem, computes d = sk_i · c1 on BabyJubJub, generates a Groth16 DLEQ proof binding (pk_i, c1, d), and returns an unsignedTx for DecryptSystem.submitPartialDecryptShare. Hole-card owners must NOT call this for their own card — submission would revert (HoleOwnerCannotSubmit). Burn / unused slots are also rejected. Once threshold (N-1 hole, N community) is met, RevealReady fires; use poker_recover_card to assemble the plaintext.",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    cardIdx: z.number().int().describe("Deck slot 0..51"),
+    seed: z.string().describe("256-bit hex seed — the same value passed to poker_publish_session_pk this hand"),
+    agentAddress: z.string().optional().describe("Optional agent wallet address — used only for an early local hole-owner check (the contract enforces it regardless)."),
+  },
+  async (args) => pokerDecryptShareHandler(args),
+);
+
+server.tool(
+  "poker_recover_card",
+  "Off-chain plaintext recovery for one card slot. Reads every share published on DecryptSystem, sums them on BabyJubJub, computes m = c2 − Σ shares, then maps m to a canonical card identity 1..52 (and decodes suit/rank). For COMMUNITY cards anyone can call this — all shares live on chain. For HOLE cards only the owner can recover: pass `ownerSeed` (the seed they used in poker_publish_session_pk) so the tool can compute the missing owner share locally without ever transmitting sk_owner. Returns identity 0 with a warning if the recovered point doesn't match any m_k = k·G (cause: missing/duplicate shares, wrong joint pk, etc).",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    cardIdx: z.number().int().describe("Deck slot 0..51"),
+    ownerSeed: z.string().optional().describe("Required ONLY when recovering your own hole card — same seed used in poker_publish_session_pk."),
+  },
+  async (args) => pokerRecoverCardHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
 process.stderr.write("arcent-poker-mcp server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arcent-poker-mcp server connected. 28 tools registered (17 base + 11 poker).\n");
+process.stderr.write("arcent-poker-mcp server connected. 30 tools registered (17 base + 13 poker).\n");

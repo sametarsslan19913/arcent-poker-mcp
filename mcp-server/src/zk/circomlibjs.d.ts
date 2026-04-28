@@ -6,6 +6,7 @@ declare module "circomlibjs" {
   export interface BabyJubField {
     e(x: bigint | string | number): Uint8Array;
     toString(x: Uint8Array): string;
+    neg(x: Uint8Array): Uint8Array;
   }
 
   export interface BabyJub {

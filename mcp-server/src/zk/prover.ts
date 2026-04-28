@@ -158,15 +158,24 @@ function execRapidsnark(
 }
 
 export function makeShuffleProver(): ShuffleProver {
+  return makeProver(config.zkShuffleWasm, config.zkShuffleZkey);
+}
+
+/**
+ * Build a Groth16 prover for the elgamal_decrypt circuit (B3.7.C). Same
+ * backends, same calldata shape — just a different (wasm, zkey) pair.
+ */
+export function makeDecryptProver(): ShuffleProver {
+  return makeProver(config.zkDecryptWasm, config.zkDecryptZkey);
+}
+
+/** Pick the configured backend for an arbitrary (wasm, zkey) circuit. */
+export function makeProver(wasmPath: string, zkeyPath: string): ShuffleProver {
   switch (config.zkProverBackend) {
     case "snarkjs":
-      return new SnarkjsShuffleProver(config.zkShuffleWasm, config.zkShuffleZkey);
+      return new SnarkjsShuffleProver(wasmPath, zkeyPath);
     case "rapidsnark":
-      return new RapidsnarkShuffleProver(
-        config.zkShuffleWasm,
-        config.zkShuffleZkey,
-        config.zkRapidsnarkBin,
-      );
+      return new RapidsnarkShuffleProver(wasmPath, zkeyPath, config.zkRapidsnarkBin);
     default:
       throw new Error(`Unknown ZK_PROVER_BACKEND: ${config.zkProverBackend}`);
   }

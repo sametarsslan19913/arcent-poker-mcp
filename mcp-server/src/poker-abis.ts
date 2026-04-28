@@ -340,6 +340,98 @@ export const PokerDealAbi = [
   },
 ] as const;
 
+// DecryptSystem.sol — partial-decryption share collector. B3.7.A introduced
+// per-card threshold (hole = N-1, community = N, burn/unused = 0) and a
+// hole-owner submission block. B3.7.C wires the agent-side path: each
+// non-owner publishes d_i = sk_i · c1 + ZK proof, then anyone can recover
+// plaintext m = c2 - Σ d_i once threshold is met (off-chain BabyJub sum).
+export const PokerDecryptAbi = [
+  {
+    // Public signal layout for the verifier (6): pk[2] + c1[2] + d[2].
+    // The contract reads c1/c2 from DealSystem.cardCiphertext and reconstructs
+    // sig[] internally — agents only send (contributorPk, d, pA, pB, pC).
+    type: "function", name: "submitPartialDecryptShare",
+    inputs: [
+      { name: "tableId",        type: "bytes32" },
+      { name: "cardIdx",        type: "uint8" },
+      { name: "contributorPk",  type: "uint256[2]" },
+      { name: "d",              type: "uint256[2]" },
+      { name: "pA",             type: "uint256[2]" },
+      { name: "pB",             type: "uint256[2][2]" },
+      { name: "pC",             type: "uint256[2]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "requiredSharesFor",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [{ name: "", type: "uint8" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "holeOwnerOf",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+  {
+    // CardRole enum: 0=Unused, 1=Hole, 2=Burn, 3=Community.
+    type: "function", name: "cardRoleOf",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [{ name: "", type: "uint8" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "getShare",
+    inputs: [
+      { name: "tableId",     type: "bytes32" },
+      { name: "cardIdx",     type: "uint8" },
+      { name: "contributor", type: "address" },
+    ],
+    outputs: [
+      { name: "x", type: "uint256" },
+      { name: "y", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "shareCount",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [{ name: "", type: "uint8" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "revealed",
+    inputs: [
+      { name: "tableId", type: "bytes32" },
+      { name: "cardIdx", type: "uint8" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+] as const;
+
+// CardRole enum mirror — keep in sync with DecryptSystem.sol.
+export const CardRole = {
+  Unused: 0,
+  Hole: 1,
+  Burn: 2,
+  Community: 3,
+} as const;
+
 // Friendly action label → enum mapping for the unified poker_action tool.
 export const PokerActionEnum = {
   fold: 0,
