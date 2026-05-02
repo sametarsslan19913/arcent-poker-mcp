@@ -14,7 +14,6 @@ import { jobStatusHandler } from "./tools/job_status.js";
 import { sendTokenHandler } from "./tools/send_token.js";
 import { bridgeSendHandler } from "./tools/bridge_send.js";
 import { balanceHandler } from "./tools/balance.js";
-import { swapHandler } from "./tools/swap.js";
 import { nanoDepositHandler } from "./tools/nano_deposit.js";
 import { nanoPayHandler } from "./tools/nano_pay.js";
 
@@ -27,8 +26,6 @@ import { pokerJoinTableHandler } from "./tools/poker_join_table.js";
 import { pokerActionHandler } from "./tools/poker_action.js";
 import { pokerTableStateHandler } from "./tools/poker_table_state.js";
 import { pokerTournamentStateHandler } from "./tools/poker_tournament_state.js";
-import { pokerDealCommitHandler } from "./tools/poker_deal_commit.js";
-import { pokerDealRevealHandler } from "./tools/poker_deal_reveal.js";
 import { pokerShuffleProveHandler } from "./tools/poker_shuffle_prove.js";
 import { pokerPublishSessionPkHandler } from "./tools/poker_publish_session_pk.js";
 import { pokerHandStartHandler } from "./tools/poker_hand_start.js";
@@ -217,19 +214,6 @@ server.tool(
   async (args) => balanceHandler(args),
 );
 
-server.tool(
-  "swap",
-  "Swap between USDC and EURC on Arc Testnet using Circle App Kit. Executes the swap on-chain and returns the tx hash.",
-  {
-    privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Signs the swap tx."),
-    tokenIn: z.enum(["USDC", "EURC"]).describe("Token to swap from"),
-    tokenOut: z.enum(["USDC", "EURC"]).describe("Token to swap to"),
-    amountIn: z.string().describe("Amount to swap (e.g. '1.00')"),
-    slippageBps: z.number().optional().describe("Max slippage in basis points. Default: 300 (3%)"),
-  },
-  async (args) => swapHandler(args),
-);
-
 // ═══════════════════════════════════════════
 // Nanopayments (Circle Gateway + x402)
 // ═══════════════════════════════════════════
@@ -352,28 +336,6 @@ server.tool(
     tournamentId: z.string().describe("Tournament id"),
   },
   async (args) => pokerTournamentStateHandler(args),
-);
-
-server.tool(
-  "poker_deal_commit",
-  "Submit commit hash for the N-of-N commit-reveal randomness round. Each seated player calls this with keccak256(seed). Reveal in poker_deal_reveal once all players have committed.",
-  {
-    player: z.string().describe("Player wallet"),
-    tableId: z.string().describe("Table id"),
-    commitHash: z.string().describe("32-byte hex hash = keccak256(seed)"),
-  },
-  async (args) => pokerDealCommitHandler(args),
-);
-
-server.tool(
-  "poker_deal_reveal",
-  "Reveal the seed used in poker_deal_commit. Contract verifies keccak256(seed) == committed hash, then XORs into the shared randomness for the deck shuffle.",
-  {
-    player: z.string().describe("Player wallet"),
-    tableId: z.string().describe("Table id"),
-    seed: z.string().describe("32-byte hex preimage of the previously committed hash"),
-  },
-  async (args) => pokerDealRevealHandler(args),
 );
 
 server.tool(

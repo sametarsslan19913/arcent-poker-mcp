@@ -215,14 +215,13 @@ export const PokerBetAbi = [
   },
 ] as const;
 
-// NOTE (2026-04-28, B3.6): the commit/reveal entries below are placeholders that
-// historically pointed at RandomnessSystem (which is what poker_deal_commit /
-// poker_deal_reveal actually need to call). Real DealSystem entries are
-// initDeal + submitShuffle (used by poker_shuffle_prove). The commit/reveal
-// pair is left in place to keep poker_deal_commit/_reveal compiling — those
-// tools should be retargeted to RandomnessSystem in a follow-up (their `reveal`
-// signature is also wrong: real RandomnessSystem.reveal takes (roundId, seed,
-// salt), not (tableId, seed)). Tracked as a B3.7 cleanup.
+// DealSystem.sol — encrypted shuffle pipeline (B3.6 ZK shuffle + B3.7.B joint
+// pk audit trail). Mental-poker design: each agent publishes pk_i with
+// publishSessionPk; coordinator sums to joint pk = Σ pk_i and seeds the deck
+// via initDeal; each agent re-encrypts via submitShuffle. There is no
+// commit/reveal randomness step — agent-side shuffle randomness is bound by
+// the Groth16 proof and the joint-pk pipeline supersedes the original
+// RandomnessSystem-based design.
 export const PokerDealAbi = [
   // DealSystem.initDeal — seed table deck with joint pk + initial ciphertexts.
   // Called once per hand by the table admin (or first agent) before sequential
@@ -342,25 +341,6 @@ export const PokerDealAbi = [
     ],
     outputs: [{ name: "", type: "bool" }],
     stateMutability: "view",
-  },
-  // -- legacy placeholders (see NOTE above) --
-  {
-    type: "function", name: "commit",
-    inputs: [
-      { name: "tableId", type: "bytes32" },
-      { name: "commitHash", type: "bytes32" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function", name: "reveal",
-    inputs: [
-      { name: "tableId", type: "bytes32" },
-      { name: "seed", type: "bytes32" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
   },
 ] as const;
 

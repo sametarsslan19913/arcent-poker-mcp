@@ -12,6 +12,7 @@
 // proofs. Production wallets get a CSPRNG (`crypto.randomBytes`).
 
 import { buildBabyjub } from "circomlibjs";
+import { randomBytes as nodeCryptoRandomBytes } from "node:crypto";
 
 const DECK_SIZE = 52;
 const SUB_ORDER =
@@ -143,10 +144,8 @@ export async function buildShuffleWitness(
 /** CSPRNG-backed RNG for production. Returns a 256-bit bigint per call. */
 export function csprngRng(): RNG {
   // crypto.randomBytes is sync and uses OpenSSL CSPRNG — fine for a few dozen calls per hand.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { randomBytes } = require("node:crypto") as typeof import("node:crypto");
   return () => {
-    const buf = randomBytes(32);
+    const buf = nodeCryptoRandomBytes(32);
     return BigInt("0x" + buf.toString("hex"));
   };
 }
