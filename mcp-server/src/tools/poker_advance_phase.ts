@@ -26,6 +26,7 @@ import { config } from "../config.js";
 import {
   PokerTableAbi,
   PokerBetAbi,
+  PokerDealAbi,
   PokerDecryptAbi,
   TablePhase,
   TablePhaseLabel,
@@ -55,12 +56,16 @@ export async function pokerAdvancePhaseHandler(args: {
   }
   const force = args.force === true;
 
-  // 1. Read current phase + roster size + round state in parallel.
+  // 1. Read current phase + active hand roster + round state in parallel.
+  //    G14 — community card index math uses DealSystem.handRoster (chips>0
+  //    snapshot at initDeal), NOT TableSystem.occupiedSeats (still includes
+  //    eliminated seats). DecryptSystem._dealRoleOf classifies by handRoster
+  //    length too; off-chain MUST mirror that or we wait for the wrong slots.
   let table: TableTuple;
   let round: RoundTuple;
-  let roster: readonly number[];
+  let handRoster: readonly number[];
   try {
-    const [t, r, occ] = await Promise.all([
+    const [t, r, hr] = await Promise.all([
       arcClient.readContract({
         address: config.pokerTable as `0x${string}`,
         abi: PokerTableAbi,
@@ -74,21 +79,21 @@ export async function pokerAdvancePhaseHandler(args: {
         args: [tableId],
       }) as Promise<RoundTuple>,
       arcClient.readContract({
-        address: config.pokerTable as `0x${string}`,
-        abi: PokerTableAbi,
-        functionName: "occupiedSeats",
+        address: config.pokerDeal as `0x${string}`,
+        abi: PokerDealAbi,
+        functionName: "handRoster",
         args: [tableId],
       }) as Promise<readonly number[]>,
     ]);
     table = t;
     round = r;
-    roster = occ;
+    handRoster = hr;
   } catch (e) {
     return errorResult(err("E_READ_FAILED", `state reads failed: ${(e as Error).message}`));
   }
 
   const phase = table.phase;
-  const N = roster.length;
+  const N = handRoster.length;
 
   // 2. Reject terminal/illegal phases. Showdown invocation is B3.7.E's job;
   //    auto-advancing River → Showdown is fine, but Showdown → Complete should

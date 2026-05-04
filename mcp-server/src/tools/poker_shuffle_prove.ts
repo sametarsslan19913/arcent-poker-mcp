@@ -17,7 +17,7 @@
 import { encodeFunctionData } from "viem";
 import { arcClient } from "../chains.js";
 import { config } from "../config.js";
-import { PokerDealAbi } from "../poker-abis.js";
+import { PokerDealAbi, PokerTableAbi } from "../poker-abis.js";
 import { okResult, errorResult, err } from "../errors.js";
 import {
   buildShuffleWitness,
@@ -36,6 +36,13 @@ const DECK_SIZE = 52;
  * the coordinator (or contract) is lying about which pk the deck was sealed
  * under, and the agent's shuffle proof would re-encrypt under a pk no one
  * actually controls — bricking the hand and possibly leaking plaintext.
+ *
+ * G14 (2026-05-06) — `deckPk` on-chain is now Σ pk_i over only the *active
+ * hand roster* (DealSystem._handRoster snapshot taken at initDeal). After
+ * any elimination, sessionPks still contains keys for eliminated agents,
+ * but they are not part of deckPk. We must filter sessionPks by the active
+ * roster before summing — otherwise this self-check would always fail in
+ * any post-elimination hand and stall the shuffle.
  *
  * Returns null on success; non-null reason string on mismatch.
  */
@@ -58,13 +65,63 @@ async function verifyJointPkAgainstSessionPks(
     return "no session pks published — joint pk has no agent-side attestation";
   }
 
+  // G14 active-roster filter. Read DealSystem.handRoster (snapshot at initDeal,
+  // chips>0 occupied seats only), then resolve each seat → player address via
+  // TableSystem.getSeat. Only sessionPk entries whose agent is in this set
+  // are part of the deckPk on chain.
+  const roster = (await arcClient.readContract({
+    address: config.pokerDeal as `0x${string}`,
+    abi: PokerDealAbi,
+    functionName: "handRoster",
+    args: [tableId],
+  })) as readonly number[];
+
+  if (roster.length === 0) {
+    // initDeal not yet called → handRoster empty. We should not be in
+    // shuffle-prove without an initialized deck (readDeckFromChain enforces
+    // isInitialized), but be explicit about the contract-state ordering.
+    return "handRoster empty — DealSystem.initDeal must precede shuffle prove";
+  }
+
+  const seatPlayers = await Promise.all(
+    roster.map((seat) =>
+      arcClient.readContract({
+        address: config.pokerTable as `0x${string}`,
+        abi: PokerTableAbi,
+        functionName: "getSeat",
+        args: [tableId, seat],
+      }) as Promise<{ player: `0x${string}` }>,
+    ),
+  );
+  const activeSet = new Set(
+    seatPlayers.map((s) => s.player.toLowerCase() as `0x${string}`),
+  );
+
+  const activeEntries = entries.filter((e) =>
+    activeSet.has(e.agent.toLowerCase() as `0x${string}`),
+  );
+
+  if (activeEntries.length === 0) {
+    return (
+      `no session pk found for any of ${roster.length} active hand-roster ` +
+      `seat(s) — coordinator may not have aggregated keys for the current hand`
+    );
+  }
+  if (activeEntries.length !== roster.length) {
+    return (
+      `incomplete session pks — ${activeEntries.length} of ${roster.length} ` +
+      `active hand-roster seats have published a key; cannot shuffle under ` +
+      `partial joint pk`
+    );
+  }
+
   const recomputed = await sumBabyJubPoints(
-    entries.map((e) => [e.pkX, e.pkY] as Point),
+    activeEntries.map((e) => [e.pkX, e.pkY] as Point),
   );
   if (recomputed[0] !== storedPk[0] || recomputed[1] !== storedPk[1]) {
     return (
       `joint pk mismatch — chain says (${storedPk[0]}, ${storedPk[1]}) but Σ ` +
-      `${entries.length} published pk_i = (${recomputed[0]}, ${recomputed[1]}). ` +
+      `${activeEntries.length} active-roster pk_i = (${recomputed[0]}, ${recomputed[1]}). ` +
       `Refusing to shuffle under an unattested pk.`
     );
   }

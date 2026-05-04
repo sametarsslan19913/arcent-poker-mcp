@@ -359,6 +359,17 @@ export const PokerDealAbi = [
     outputs: [{ name: "", type: "bool" }],
     stateMutability: "view",
   },
+  // G14 — DealSystem snapshots active seat roster at initDeal time. After
+  // initDeal, this is the authoritative list for jointPk / shuffle order /
+  // decrypt classification. Off-chain joint pk recompute, community card
+  // index calculations, and shuffle authorization MUST filter by this set
+  // (not by TableSystem.occupiedSeats which still includes eliminated seats).
+  {
+    type: "function", name: "handRoster",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint8[]" }],
+    stateMutability: "view",
+  },
 ] as const;
 
 // DecryptSystem.sol — partial-decryption share collector. B3.7.A introduced

@@ -3,7 +3,10 @@
 // Coordinator and agents both poll this tool to answer "what should I do
 // next?" without making 5+ separate read calls. It bundles:
 //   - TableSystem.getTable       (phase, handNumber, currentActor, occupiedCount)
-//   - TableSystem.occupiedSeats  (roster — needed to compute hole vs community)
+//   - TableSystem.occupiedSeats  (presentation: which seats are physically taken)
+//   - DealSystem.handRoster      (G14: active hand roster — chips>0 snapshot
+//                                 at initDeal time; this is the layout authority
+//                                 for hole-vs-community card index math)
 //   - BetSystem.getRound         (roundComplete, currentBet, lastAggressor)
 //   - For each card index belonging to the *next* phase's community reveal,
 //     DecryptSystem.requiredSharesFor + shareCount + revealed.
@@ -24,6 +27,7 @@ import { config } from "../config.js";
 import {
   PokerTableAbi,
   PokerBetAbi,
+  PokerDealAbi,
   PokerDecryptAbi,
   TablePhase,
   TablePhaseLabel,
@@ -61,12 +65,13 @@ export async function pokerRoundStatusHandler(args: { tableId: string }) {
     return errorResult(err("E_INVALID_TABLE_ID", "tableId must be 32-byte hex"));
   }
 
-  // Parallel reads — table + round + occupied roster are independent.
+  // Parallel reads — table + round + occupied roster + active hand roster are independent.
   let table: TableTuple;
   let round: RoundTuple;
-  let roster: readonly number[];
+  let occupied: readonly number[];
+  let handRoster: readonly number[];
   try {
-    const [t, r, occ] = await Promise.all([
+    const [t, r, occ, hr] = await Promise.all([
       arcClient.readContract({
         address: config.pokerTable as `0x${string}`,
         abi: PokerTableAbi,
@@ -85,15 +90,29 @@ export async function pokerRoundStatusHandler(args: { tableId: string }) {
         functionName: "occupiedSeats",
         args: [tableId],
       }) as Promise<readonly number[]>,
+      arcClient.readContract({
+        address: config.pokerDeal as `0x${string}`,
+        abi: PokerDealAbi,
+        functionName: "handRoster",
+        args: [tableId],
+      }) as Promise<readonly number[]>,
     ]);
     table = t;
     round = r;
-    roster = occ;
+    occupied = occ;
+    handRoster = hr;
   } catch (e) {
     return errorResult(err("E_READ_FAILED", `parallel reads failed: ${(e as Error).message}`));
   }
 
-  const N = roster.length;
+  // G14 — community card index math MUST use handRoster.length, not occupiedSeats.length.
+  // After elimination, occupiedSeats may still hold the eliminated seat (player.chips==0
+  // before next-hand cleanup) while handRoster only contains chips>0 active seats.
+  // DecryptSystem._dealRoleOf uses handRoster.length for hole(2N) / burn(2N+...) /
+  // community(2N+1..) classification — off-chain MUST mirror that.
+  // Pre-initDeal phases (WaitingForPlayers) handRoster is empty; communityCardIdxsForNextPhase
+  // returns [] in those branches anyway, so N=0 is safe.
+  const N = handRoster.length;
   const phase = table.phase;
   const nextPhase = nextPhaseAfter(phase);
   const communityCardIdxs = communityCardIdxsForNextPhase(phase, N);
@@ -175,8 +194,12 @@ export async function pokerRoundStatusHandler(args: { tableId: string }) {
     handNumber: table.handNumber.toString(),
     currentActor: table.currentActor,
     dealerButton: table.dealerButton,
+    // occupiedCount kept for backwards compat — reflects active hand-roster count
+    // (used by deal layout). occupiedSeats lists the physical occupancy.
     occupiedCount: N,
-    occupiedSeats: roster.map((s) => Number(s)),
+    occupiedSeats: occupied.map((s) => Number(s)),
+    handRoster: handRoster.map((s) => Number(s)),
+    handRosterCount: N,
     round: {
       handNumber: round.handNumber.toString(),
       currentBet: round.currentBet.toString(),
