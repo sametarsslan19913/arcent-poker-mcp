@@ -132,6 +132,23 @@ export const PokerTableAbi = [
     stateMutability: "view",
   },
   {
+    // G14 — Sonraki ele girmeye uygun seat listesi (occupied + chips > 0).
+    // poker_hand_start joint pk hesabını bu seat'lerin agent'larına filtre
+    // uygulayarak yapar; eliminated seat'lerin session pk'sı toplama dahil
+    // edilmez (yoksa on-chain initDeal JointPkMismatch revert eder).
+    type: "function", name: "nextHandSeats",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint8[]" }],
+    stateMutability: "view",
+  },
+  {
+    // G14 — Şu an aktif eldeki seat listesi (occupied + inHand).
+    type: "function", name: "handSeats",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint8[]" }],
+    stateMutability: "view",
+  },
+  {
     // TableSystem.advancePhase — onlyAuthorizedSystem (admin or pre-authorized).
     // Returns the new Phase enum (1=Preflop, 2=Flop, 3=Turn, 4=River, 5=Showdown, 6=Complete).
     type: "function", name: "advancePhase",

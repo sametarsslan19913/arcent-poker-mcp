@@ -23,7 +23,7 @@
 import { encodeFunctionData, parseAbi } from "viem";
 import { arcClient } from "../chains.js";
 import { config } from "../config.js";
-import { PokerDealAbi } from "../poker-abis.js";
+import { PokerDealAbi, PokerTableAbi } from "../poker-abis.js";
 import { okResult, errorResult, err } from "../errors.js";
 import { sumBabyJubPoints, type Point } from "../zk/shuffle-input.js";
 import { buildBabyjub } from "circomlibjs";
@@ -83,7 +83,9 @@ export async function pokerHandStartHandler(args: {
   }
   const minPks = Math.max(1, args.minPks ?? 2);
 
-  // 1. Read published session pks.
+  // 1. Read published session pks (full audit trail — eliminated agents
+  //    too — used only as a lookup table; jointPk hesabı G14 sonrası bu
+  //    listenin TÜMÜ üzerinde değil, aktif hand roster filtresi ile yapılır).
   let entries: readonly { agent: `0x${string}`; pkX: bigint; pkY: bigint }[];
   try {
     entries = (await arcClient.readContract({
@@ -106,10 +108,70 @@ export async function pokerHandStartHandler(args: {
     );
   }
 
-  // 2. Joint pk = Σ pk_i (off-chain BabyJub sum).
+  // 1b. G14 — Active hand roster filter. Eliminated tournament players
+  //     stay in occupiedSeats() for ranking but must NOT contribute to
+  //     jointPk (DealSystem.initDeal yalnızca chips > 0 seat'lerin Σ pk_i'sini
+  //     bekliyor). Kontrat _handRoster snapshot'ı initDeal anında alır;
+  //     biz off-chain'de aynı filtreyi (nextHandSeats) okur, sadece o
+  //     seat'lerin player adreslerine ait pk_i'leri toplama dahil ederiz.
+  let activeSeatIdx: readonly number[];
+  try {
+    activeSeatIdx = (await arcClient.readContract({
+      address: config.pokerTable as `0x${string}`,
+      abi: PokerTableAbi,
+      functionName: "nextHandSeats",
+      args: [tableId],
+    })) as readonly number[];
+  } catch (e) {
+    return errorResult(
+      err("E_TABLE_READ", `failed to read nextHandSeats: ${(e as Error).message}`),
+    );
+  }
+  if (activeSeatIdx.length < minPks) {
+    return errorResult(
+      err(
+        "E_NOT_ENOUGH_FUNDED_SEATS",
+        `only ${activeSeatIdx.length} funded seat(s) — need ≥ ${minPks} for next hand.`,
+      ),
+    );
+  }
+
+  // Resolve seat → player address via getSeat, build active address set.
+  const activePlayers = new Set<string>();
+  for (const seatIdx of activeSeatIdx) {
+    let seat: { player: `0x${string}` };
+    try {
+      seat = (await arcClient.readContract({
+        address: config.pokerTable as `0x${string}`,
+        abi: PokerTableAbi,
+        functionName: "getSeat",
+        args: [tableId, seatIdx],
+      })) as { player: `0x${string}` };
+    } catch (e) {
+      return errorResult(
+        err("E_TABLE_READ", `failed to read seat ${seatIdx}: ${(e as Error).message}`),
+      );
+    }
+    activePlayers.add(seat.player.toLowerCase());
+  }
+
+  // Filter session pk entries to active players only.
+  const activeEntries = entries.filter((e) =>
+    activePlayers.has(e.agent.toLowerCase()),
+  );
+  if (activeEntries.length !== activeSeatIdx.length) {
+    return errorResult(
+      err(
+        "E_ROSTER_PK_MISSING",
+        `active roster has ${activeSeatIdx.length} seat(s) but only ${activeEntries.length} published session pk(s) match — every active agent must call poker_publish_session_pk first.`,
+      ),
+    );
+  }
+
+  // 2. Joint pk = Σ pk_i (off-chain BabyJub sum) — yalnızca aktif roster.
   let jointPk: Point;
   try {
-    jointPk = await sumBabyJubPoints(entries.map((e) => [e.pkX, e.pkY] as Point));
+    jointPk = await sumBabyJubPoints(activeEntries.map((e) => [e.pkX, e.pkY] as Point));
   } catch (e) {
     return errorResult(
       err("E_AGGREGATE_FAILED", `joint pk aggregation failed: ${(e as Error).message}`),
@@ -151,13 +213,19 @@ export async function pokerHandStartHandler(args: {
     tableId,
     jointPkX: jointPk[0].toString(),
     jointPkY: jointPk[1].toString(),
+    // G14 — `contributors` artık AKTİF roster (eliminated agent'lar hariç).
+    // `sessionPkCount` audit trail toplamı, `activeContributorCount`
+    // jointPk'ya dahil edilen filtreli sayı.
     sessionPkCount: entries.length,
-    contributors: entries.map((e) => e.agent),
+    activeContributorCount: activeEntries.length,
+    contributors: activeEntries.map((e) => e.agent),
     note:
-      "initDeal unsignedTx ready. Other agents should re-sum getSessionPks " +
-      "(BabyJub) and assert it equals (jointPkX, jointPkY) before submitting " +
-      "their shuffle round. After this tx lands, agents call poker_shuffle_prove " +
-      "in seating order.",
+      "initDeal unsignedTx ready. JointPk is summed over the ACTIVE hand " +
+      "roster only (G14 fix — eliminated tournament players excluded). " +
+      "Other agents should fetch nextHandSeats(tableId), resolve seat→player, " +
+      "filter getSessionPks accordingly, BabyJub-sum, and assert equals " +
+      "(jointPkX, jointPkY) before shuffling. After this tx lands, " +
+      "agents call poker_shuffle_prove in seat order.",
   };
 
   // 5. Optional startHand tx.
