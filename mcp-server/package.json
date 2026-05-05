@@ -43,5 +43,13 @@
     "@types/node": "^22.10.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "axios": "^1.16.0",
+      "ip-address": "^10.2.0",
+      "uuid": "^11.0.0",
+      "underscore": "^1.13.7"
+    }
   }
 }
