@@ -64,3 +64,6 @@ research/external-repos/
 
 # Internal research scrapes (hackathon page HTML/JSON, ~16MB, not for public repo)
 research/lablab-scrape/
+
+# pnpm canonical — npm lockfile drift'ten kaçın (re-audit 2026-05-06)
+package-lock.json
