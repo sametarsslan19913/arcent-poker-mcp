@@ -24,8 +24,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@circle-fin/x402-batching':
-        specifier: ^2.1.0
-        version: 2.1.0(@x402/core@2.11.0)(viem@2.48.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))
+        specifier: ^3.0.4
+        version: 3.0.4(@x402/core@2.11.0)(viem@2.48.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))
       '@coral-xyz/anchor':
         specifier: ^0.32.1
         version: 0.32.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -111,8 +111,8 @@ packages:
     resolution: {integrity: sha512-3kJFGk0LEedLO7tQ8vwqSPsp/eH/n2sYvc2MKxpqegXrJL1XlBKg2mIJNR8skMx+0BWNVCMIGdpxjkHdodaraQ==}
     engines: {node: '>=16.0.0'}
 
-  '@circle-fin/x402-batching@2.1.0':
-    resolution: {integrity: sha512-FtumeFYROaucW491+3DcH5EfIJL5KKPJje5q1iiAEptmuJHMZ38bcib2W1ifmh7IVvO+ZUVCbMq9aqbIqgsiQw==}
+  '@circle-fin/x402-batching@3.0.4':
+    resolution: {integrity: sha512-631ZdmNQiCdNRLCY3uNTiD8G+cK4wiIElk/iQESwcpziQfirBXPCR9At14Kqgeq6tyFF67wHrIZzSRhPWk7C6Q==}
     engines: {node: '>=18'}
     peerDependencies:
       '@x402/core': ^2.3.0
@@ -3137,7 +3137,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@circle-fin/x402-batching@2.1.0(@x402/core@2.11.0)(viem@2.48.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))':
+  '@circle-fin/x402-batching@3.0.4(@x402/core@2.11.0)(viem@2.48.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))':
     dependencies:
       '@x402/core': 2.11.0
       viem: 2.48.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
@@ -6403,10 +6403,10 @@ snapshots:
   ox@0.6.7(typescript@5.9.3)(zod@3.25.76):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
-      '@noble/curves': 1.8.1
-      '@noble/hashes': 1.7.1
-      '@scure/bip32': 1.6.2
-      '@scure/bip39': 1.5.4
+      '@noble/curves': 1.9.7
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
       abitype: 1.0.8(typescript@5.9.3)(zod@3.25.76)
       eventemitter3: 5.0.1
     optionalDependencies:
