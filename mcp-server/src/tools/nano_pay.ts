@@ -70,17 +70,36 @@ function intToIPv4(n: number): string {
   return [(n >>> 24) & 0xFF, (n >>> 16) & 0xFF, (n >>> 8) & 0xFF, n & 0xFF].join(".");
 }
 
+/**
+ * Audit MCP1 (2026-05-08) — the LLM agent must NEVER see the player's PK.
+ * Pre-fix the tool schema accepted `privateKey` as an argument, so each
+ * tool call serialized the PK into the LLM's tool-call JSON, leaking it
+ * into OpenRouter logs / prompt history. Now the MCP server reads PLAYER_PK
+ * from its own environment at startup; the tool schema no longer accepts
+ * a privateKey field.
+ */
+function loadPlayerPk(): `0x${string}` | { error: string } {
+  const pk = process.env.PLAYER_PK;
+  if (!pk) {
+    return { error: "PLAYER_PK env not set on the MCP server (required for nano_pay/nano_deposit)" };
+  }
+  if (!pk.startsWith("0x") || pk.length !== 66) {
+    return { error: "PLAYER_PK env must be a valid 0x-prefixed 32-byte hex string" };
+  }
+  return pk as `0x${string}`;
+}
+
 export async function nanoPayHandler(args: {
-  privateKey: string;
   url: string;
   method?: string;
   body?: unknown;
   chain?: string;
 }) {
-  const pk = args.privateKey as `0x${string}`;
-  if (!pk || !pk.startsWith("0x") || pk.length !== 66) {
-    return errorResult(err("E_INVALID_PK", "privateKey must be a valid 0x-prefixed 32-byte hex string"));
+  const pkOrErr = loadPlayerPk();
+  if (typeof pkOrErr !== "string") {
+    return errorResult(err("E_PK_NOT_CONFIGURED", pkOrErr.error));
   }
+  const pk = pkOrErr;
 
   let parsed: URL;
   try {

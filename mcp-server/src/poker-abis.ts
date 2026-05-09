@@ -27,6 +27,16 @@ export const PokerOrchestratorAbi = [
     stateMutability: "nonpayable",
   },
   {
+    type: "function", name: "depositFor",
+    inputs: [
+      { name: "tournamentId", type: "bytes32" },
+      { name: "agentId", type: "uint256" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
     type: "function", name: "start",
     inputs: [{ name: "tournamentId", type: "bytes32" }],
     outputs: [],

@@ -220,9 +220,8 @@ server.tool(
 
 server.tool(
   "nano_deposit",
-  "Deposit USDC into Circle Gateway Wallet for gasless x402 nanopayments. After this one-time gas cost, all subsequent nano_pay calls settle off-chain (batched).",
+  "Deposit USDC into Circle Gateway Wallet for gasless x402 nanopayments. After this one-time gas cost, all subsequent nano_pay calls settle off-chain (batched). PK is read from PLAYER_PK env on the MCP server — do NOT pass any private key in the tool call.",
   {
-    privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Signs the deposit tx."),
     amountUsdc: z.string().describe("USDC amount to deposit (e.g. '1.00'). This is one-time funding for the Gateway buffer."),
     chain: z.string().optional().describe("Chain name. Default: arcTestnet. Other supported testnets: baseSepolia, ethereumSepolia, arbitrumSepolia, avalancheFuji, optimismSepolia, polygonAmoy, etc."),
   },
@@ -231,9 +230,8 @@ server.tool(
 
 server.tool(
   "nano_pay",
-  "Pay an x402-protected resource using Circle Gateway nanopayments. Handles 402 challenge automatically: parses requirements, signs EIP-3009 authorization, retries with X-Payment header. Gasless and sub-cent.",
+  "Pay an x402-protected resource using Circle Gateway nanopayments. Handles 402 challenge automatically: parses requirements, signs EIP-3009 authorization, retries with X-Payment header. Gasless and sub-cent. PK is read from PLAYER_PK env on the MCP server — do NOT pass any private key in the tool call.",
   {
-    privateKey: z.string().describe("Wallet private key (0x-prefixed, 32 bytes). Must have prior nano_deposit balance."),
     url: z.string().describe("URL of the x402-paywalled resource (full http(s) URL)"),
     method: z.enum(["GET", "POST", "PUT", "DELETE"]).optional().describe("HTTP method. Default: GET"),
     body: z.any().optional().describe("Request body (for POST/PUT)"),
