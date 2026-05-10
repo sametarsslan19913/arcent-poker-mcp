@@ -563,12 +563,15 @@ export function nextPhaseAfter(currentPhase: number): number {
 }
 
 // Friendly action label → enum mapping for the unified poker_action tool.
+// 2026-05-10 — BetSystem.Action enum'i `{Fold,Check,Call,Raise}` (no AllIn).
+// All-in artik action degil DURUM: player'in stack'i call edemeyecek kadar
+// azsa BetSystem partial-call kabul edip seat.allIn=true set ediyor (standart
+// hold'em). Brain "allin" demesin — `call` veya `raise` amount=stack ile yeter.
 export const PokerActionEnum = {
   fold: 0,
   check: 1,
   call: 2,
   raise: 3,
-  allin: 4,
 } as const;
 
 export type PokerActionLabel = keyof typeof PokerActionEnum;

@@ -1,8 +1,7 @@
 // poker_advance_phase — coordinator-side phase transition.
 //
-// Call after BetSystem.RoundState.roundComplete=true (and the relevant community
-// cards have been fully decrypted, if any). This tool returns one or two
-// unsignedTxs the coordinator broadcasts in order:
+// Call after BetSystem.RoundState.roundComplete=true. This tool returns one or
+// two unsignedTxs the coordinator broadcasts in order:
 //
 //   Preflop → Flop  : [TableSystem.advancePhase, BetSystem.initRound]
 //   Flop    → Turn  : [TableSystem.advancePhase, BetSystem.initRound]
@@ -14,10 +13,12 @@
 // be the table admin or have been authorizeSystem'd. Showdown / Complete →
 // rejected (E_PHASE_TERMINAL); the showdown invoker (B3.7.E) handles those.
 //
-// The tool defaults to *strict* mode: it refuses to emit txs unless
-//   (a) round.roundComplete = true, AND
-//   (b) every community card belonging to the next phase is on-chain revealed.
-// `force=true` skips both checks — useful for diagnostic broadcasts but
+// 2026-05-10 — Phase ordering fix. Earlier tooling refused to emit until the
+// next phase's community cards were already revealed; that contradicted the
+// contract's C-02B audit fix (2026-05-08 / 2026-05-10), which now rejects
+// community-card decrypt while `phase < Flop/Turn/River`. Decrypt now MUST
+// happen AFTER advancePhase, so the only pre-check left is roundComplete.
+// `force=true` skips that one check — useful for diagnostic broadcasts but
 // dangerous in normal operation.
 
 import { encodeFunctionData } from "viem";
@@ -27,7 +28,6 @@ import {
   PokerTableAbi,
   PokerBetAbi,
   PokerDealAbi,
-  PokerDecryptAbi,
   TablePhase,
   TablePhaseLabel,
   communityCardIdxsForNextPhase,
@@ -61,6 +61,9 @@ export async function pokerAdvancePhaseHandler(args: {
   //    snapshot at initDeal), NOT TableSystem.occupiedSeats (still includes
   //    eliminated seats). DecryptSystem._dealRoleOf classifies by handRoster
   //    length too; off-chain MUST mirror that or we wait for the wrong slots.
+  //    2026-05-10 — PokerDecryptAbi no longer needed here (revealed[] check
+  //    removed); kept inline only for tx encoding when DecryptSystem is reached
+  //    elsewhere.
   let table: TableTuple;
   let round: RoundTuple;
   let handRoster: readonly number[];
@@ -118,7 +121,16 @@ export async function pokerAdvancePhaseHandler(args: {
   const nextPhase = nextPhaseAfter(phase);
   const communityCardIdxs = communityCardIdxsForNextPhase(phase, N);
 
-  // 3. Strict checks (skip if force=true).
+  // 3. Strict check — only roundComplete (skip if force=true).
+  //
+  //    2026-05-10 — revealed[] community-card pre-check kaldirildi. Eski mantik:
+  //    "decrypt → advancePhase" (kart acilmadan phase ilerletilmesin). Yeni
+  //    kontrat C-02B audit fix (2026-05-08 / 2026-05-10) ile decrypt phase >=
+  //    Flop/Turn/River bekliyor → advancePhase decrypt'ten ONCE cagrilmali.
+  //    Off-chain validation kontrat ile cakisiyordu (smoke deadlock); doğru
+  //    siralama kontrat tarafinda zorunlu kilindigi icin tek pre-check
+  //    roundComplete kaldi. Reveal sirasi: roundComplete -> advancePhase ->
+  //    decrypt_share (community cards) -> next round.
   if (!force) {
     if (!round.roundComplete) {
       return errorResult(
@@ -127,34 +139,6 @@ export async function pokerAdvancePhaseHandler(args: {
           `BetSystem.RoundState.roundComplete=false for handNumber ${table.handNumber}. Wait for the betting round to finish before advancing.`,
         ),
       );
-    }
-    if (communityCardIdxs.length > 0) {
-      try {
-        const revealedFlags = await Promise.all(
-          communityCardIdxs.map(
-            (idx) =>
-              arcClient.readContract({
-                address: config.pokerDecrypt as `0x${string}`,
-                abi: PokerDecryptAbi,
-                functionName: "revealed",
-                args: [tableId, idx],
-              }) as Promise<boolean>,
-          ),
-        );
-        const pending = communityCardIdxs.filter((_, i) => !revealedFlags[i]);
-        if (pending.length > 0) {
-          return errorResult(
-            err(
-              "E_REVEAL_PENDING",
-              `Community card(s) ${pending.join(", ")} not yet revealed (threshold not met). Each agent must run poker_decrypt_share for these cardIdxs before advancing.`,
-            ),
-          );
-        }
-      } catch (e) {
-        return errorResult(
-          err("E_DECRYPT_READ", `revealed[] read failed: ${(e as Error).message}`),
-        );
-      }
     }
   }
 
