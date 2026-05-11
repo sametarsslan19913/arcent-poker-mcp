@@ -30,14 +30,23 @@ export const config = {
   fxEscrow: env("FX_ESCROW", "0x867650F5eAe8df91445971f14d89fd84F0C9a9f8") as `0x${string}`,
   permit2: env("PERMIT2", "0x000000000022D473030F116dDEE9F6B43aC78BA3") as `0x${string}`,
 
-  // arcent-poker (M6.A redeploy 2026-04-26, block 39173820)
-  pokerOrchestrator: env("POKER_ORCHESTRATOR", "0xbD4F6Ae631306EF2819aE6a1DD04251df90a02DA") as `0x${string}`,
-  pokerTable:        env("POKER_TABLE_SYSTEM", "0x19b83045B5b8A78896B4922D24F162a002cA18a6") as `0x${string}`,
-  pokerBet:          env("POKER_BET_SYSTEM",   "0xaaF95D579d1BA200D10a38efE880a169eDF25F4E") as `0x${string}`,
-  pokerShowdown:     env("POKER_SHOWDOWN_SYSTEM", "0x23212EcF4cf2b79a893FE1f768EB079E429d9CC1") as `0x${string}`,
-  pokerDeal:         env("POKER_DEAL_SYSTEM",  "0xc69a40C24ec71eC321190957e98db9F7f3737532") as `0x${string}`,
-  pokerDecrypt:      env("POKER_DECRYPT_SYSTEM", "0x24607f3BA930C657837a3B1CCA8BAbb69238fc8D") as `0x${string}`,
-  pokerRandomness:   env("POKER_RANDOMNESS_SYSTEM", "0x06763877A3269aD32b28F1238EcF012c0Bb73d54") as `0x${string}`,
+  // arcent-poker — env-required.
+  //
+  // 2026-05-11 — Codex public-readiness audit P0-2 fix. Eski hardcoded
+  // default'lar her redeploy'da geride kaldığı için (M6.A 2026-04-26 →
+  // 6+ redeploy turu) env zorunlu hale getirildi. Caller (agent-runner
+  // start-all.sh veya kullanıcı `.mcp.json`'u) güncel adresleri sağlamalı.
+  // En son redeploy adresleri: arcent-poker/docs/DEPLOYMENT.md (2026-05-11
+  // deep-audit refactor + USDC-only).
+  //
+  // POKER_RANDOMNESS_SYSTEM 2026-05-10 audit'inde legacy/'a taşındı
+  // (Arc block.prevrandao = 0 → kullanılamaz, hiçbir sistem çağırmıyordu).
+  pokerOrchestrator: env("POKER_ORCHESTRATOR") as `0x${string}`,
+  pokerTable:        env("POKER_TABLE_SYSTEM") as `0x${string}`,
+  pokerBet:          env("POKER_BET_SYSTEM")   as `0x${string}`,
+  pokerShowdown:     env("POKER_SHOWDOWN_SYSTEM") as `0x${string}`,
+  pokerDeal:         env("POKER_DEAL_SYSTEM")  as `0x${string}`,
+  pokerDecrypt:      env("POKER_DECRYPT_SYSTEM") as `0x${string}`,
 
   // ZK shuffle artifacts (B3.6). N=52 deck, snarkjs Groth16 production verifier.
   // Prover backend swappable: "snarkjs" (default, JS, ~20 s/proof) or "rapidsnark" (B3.6.5, C++ native, ~3-4 s/proof).
