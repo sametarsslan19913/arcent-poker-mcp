@@ -1,6 +1,6 @@
 # Arcent Agent MCP
 
-> **An MCP-native toolkit that turns AI agents into first-class participants in Arc's agent economy.** ERC-8004 identity, ERC-8183 jobs, Circle Nanopayments, CCTP bridge, StableFX swap — **17 tools in one server**.
+> **An MCP-native toolkit that turns AI agents into first-class participants in Arc's agent economy + on-chain Texas Hold'em.** ERC-8004 identity, ERC-8183 jobs, Circle Nanopayments, CCTP bridge, plus **15 poker tools** (table state, ZK shuffle, decrypt shares, showdown, tournament lifecycle) — **31 tools in one server**.
 
 > **Note:** **Not affiliated with [cutepawss/arcent](https://github.com/cutepawss/arcent) (x402 gateway) or U.S. Army Central.** Arcent Agent MCP is a separate project — the first MCP-native toolkit for Arc's agent economy.
 
@@ -10,13 +10,13 @@
 
 ## What Is This?
 
-AI agents (Claude, Cursor, ChatGPT) can think but they can't act on a blockchain — no wallet, no contract calls, no payment rails. We wrap **Arc's agent economy infrastructure** in 17 MCP tools so any AI client can:
+AI agents (Claude, Cursor, ChatGPT) can think but they can't act on a blockchain — no wallet, no contract calls, no payment rails. We wrap **Arc's agent economy infrastructure** in 31 MCP tools so any AI client can:
 
 - **Have an identity** on-chain (ERC-8004 NFT)
 - **Hire other agents** with escrow-protected jobs (ERC-8183)
 - **Pay sub-cent prices** for paywalled APIs (Circle Nanopayments + x402)
 - **Move USDC across chains** (CCTP v2)
-- **Swap USDC ↔ EURC** (Circle StableFX)
+- **Play on-chain Texas Hold'em** with mental-poker ZK shuffle + per-card decrypt (arcent-poker)
 
 Just talk to your AI:
 
@@ -26,14 +26,15 @@ Just talk to your AI:
 "Reject this submission, refund my escrow"         → job_reject + job_claim_refund
 "Deposit 1 USDC into Gateway, then pay this API"   → nano_deposit + nano_pay
 "Bridge 100 USDC to Base Sepolia"                  → bridge_send
-"Swap 5 USDC to EURC"                              → swap
+"Join the tournament + start the next hand"        → poker_register_for_tournament + poker_hand_start
+"Shuffle the deck (ZK proof) + decrypt my hole"    → poker_shuffle_prove + poker_decrypt_share
 ```
 
 No frontend. No SDK glue. Just Claude Desktop config + your private key.
 
 ---
 
-## The 17 Tools
+## The 31 Tools
 
 ### Agent Identity — ERC-8004 (3)
 
@@ -56,14 +57,18 @@ No frontend. No SDK glue. Just Claude Desktop config + your private key.
 | `job_claim_refund` | Client recovers escrow (after reject or expiry) |
 | `job_status` | Query job state, parties, budget |
 
-### Payments — Circle App Kit + direct (4)
+### Payments — Circle App Kit + direct (3)
 
 | Tool | Purpose | SDK |
 |---|---|---|
 | `send_token` | Transfer USDC / EURC / USDT on Arc + 6 testnets | `AppKit.send()` |
-| `swap` | USDC ↔ EURC via StableFX | `SwapKit.swap()` |
 | `bridge_send` | USDC across chains via CCTP v2 (bidirectional) | `AppKit.bridge()` |
 | `balance` | USDC + EURC balance for any wallet | direct RPC |
+
+> **Not included in poker MCP:** `swap` (USDC ↔ EURC via StableFX). The poker stack
+> uses USDC end-to-end as Arc's native gas + entry token, so currency conversion is
+> out of scope. Use the base [arcent-agent-mcp](https://github.com/sametarsslan19913/arcent-agent-mcp)
+> server for `SwapKit.swap()` if you need EURC.
 
 ### Nanopayments — Circle Gateway + x402 (2)
 
@@ -71,6 +76,26 @@ No frontend. No SDK glue. Just Claude Desktop config + your private key.
 |---|---|---|
 | `nano_deposit` | One-time USDC deposit into Gateway Wallet | `@circle-fin/x402-batching` |
 | `nano_pay` | Pay an x402-paywalled URL (gasless, sub-cent) | `@circle-fin/x402-batching` |
+
+### Poker — arcent-poker on-chain Texas Hold'em (15)
+
+| Tool | Purpose |
+|---|---|
+| `poker_create_tournament` | Open a tournament (USDC entry, payout split, registration deadline) |
+| `poker_register_for_tournament` | EIP-3009 atomic prepay + register (single-tx USDC in) |
+| `poker_start_tournament` | Permissionless start once `minPlayers` reached |
+| `poker_tournament_state` | Read tournament phase, registered count, deadline |
+| `poker_join_table` | Sit at a seat (agentId ownership verified on-chain) |
+| `poker_table_state` | Read seat layout, dealer, blinds, current actor, pot |
+| `poker_hand_start` | Deal blinds + start the betting round |
+| `poker_round_status` | Read current round phase + roundComplete flag |
+| `poker_action` | Submit action (fold/check/call/raise/allin) |
+| `poker_advance_phase` | Move Preflop → Flop → Turn → River → Showdown |
+| `poker_shuffle_prove` | Generate Groth16 ZK shuffle proof (rapidsnark/snarkjs) |
+| `poker_publish_session_pk` | Publish BabyJub joint public key after DKG |
+| `poker_decrypt_share` | Submit per-card threshold decrypt share + ZK proof |
+| `poker_recover_card` | Combine N-of-M shares to reconstruct a plaintext card |
+| `poker_finalize_tournament` | Build elimination ranking + invoke finalize callback |
 
 ---
 
@@ -152,8 +177,7 @@ Your AI Curator          Seller AI
                           NFT transferred to your wallet
                           job_submit(tx_hash)
    job_complete  ──→ $50 to seller
-   swap($50 USDC → $40 EURC)  (you wanted EUR)
-   bridge_send($40 EURC → Base Sepolia)  (you wanted Base)
+   bridge_send($50 USDC → Base Sepolia)  (you wanted Base)
 ```
 
 Single conversation. Multiple chains. No human clicks.
@@ -227,7 +251,7 @@ Claude / Cursor / any MCP client
               └── USDC + EURC
 ```
 
-**Hybrid pattern by design:** Where SDK abstraction helps (`swap`, `bridge_send`, `send_token`, `nano_deposit`, `nano_pay`), we wrap official Circle SDKs. Where direct contract calls are cleaner (all `agent_*` and `job_*` tools), we use viem to return unsigned transactions for the wallet to sign.
+**Hybrid pattern by design:** Where SDK abstraction helps (`bridge_send`, `send_token`, `nano_deposit`, `nano_pay`), we wrap official Circle SDKs. Where direct contract calls are cleaner (all `agent_*`, `job_*` and `poker_*` tools), we use viem to return unsigned transactions for the wallet to sign.
 
 ---
 
@@ -253,7 +277,7 @@ Claude / Cursor / any MCP client
 
 - **TypeScript** + [MCP SDK](https://github.com/modelcontextprotocol/sdk) + [viem](https://viem.sh) + [Zod](https://zod.dev)
 - **Arc Testnet** — Circle's EVM-compatible L1 with USDC-native gas
-- **Circle App Kits** — `@circle-fin/app-kit`, `@circle-fin/swap-kit` for Bridge/Swap/Send
+- **Circle App Kit** — `@circle-fin/app-kit` for Bridge/Send (`SwapKit` not used — poker stack is USDC-only)
 - **Circle Nanopayments SDK** — `@circle-fin/x402-batching` for gasless x402 payments
 - **CCTP v2** — Circle's cross-chain transfer protocol
 
