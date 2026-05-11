@@ -80,6 +80,67 @@ export const PokerOrchestratorAbi = [
     outputs: [{ name: "", type: "bool" }],
     stateMutability: "view",
   },
+  // 2026-05-11 — P0-4 son kullanici akisi tool'lari icin claim entries.
+  // MS-2 pull-over-push: finalize pendingPayout'u, cancel ise pendingRefund'u
+  // yazar; agent owner kendisi pull eder. depositFor sonrasi kullanilmayan
+  // bakiye withdrawPendingDeposit ile geri cekilir (Registering/Running'de).
+  {
+    type: "function", name: "claimPayout",
+    inputs: [
+      { name: "tournamentId", type: "bytes32" },
+      { name: "agentId", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "claimRefund",
+    inputs: [
+      { name: "tournamentId", type: "bytes32" },
+      { name: "agentId", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "withdrawPendingDeposit",
+    inputs: [
+      { name: "tournamentId", type: "bytes32" },
+      { name: "agentId", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  // Views — son kullanici claim oncesi 0 mi diye kontrol edebilsin.
+  {
+    type: "function", name: "pendingPayout",
+    inputs: [
+      { name: "tournamentId", type: "bytes32" },
+      { name: "agentId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function", name: "pendingRefund",
+    inputs: [
+      { name: "tournamentId", type: "bytes32" },
+      { name: "agentId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    // pendingDeposit[tournamentId][depositor][agentId] -> uint256
+    type: "function", name: "pendingDeposit",
+    inputs: [
+      { name: "tournamentId", type: "bytes32" },
+      { name: "depositor", type: "address" },
+      { name: "agentId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
 ] as const;
 
 export const PokerTableAbi = [

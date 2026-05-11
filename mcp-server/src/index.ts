@@ -33,6 +33,10 @@ import { pokerDecryptShareHandler } from "./tools/poker_decrypt_share.js";
 import { pokerRecoverCardHandler } from "./tools/poker_recover_card.js";
 import { pokerRoundStatusHandler } from "./tools/poker_round_status.js";
 import { pokerAdvancePhaseHandler } from "./tools/poker_advance_phase.js";
+// 2026-05-11 — P0-4 son kullanici akisi tool'lari (Codex public-readiness audit).
+import { pokerClaimPayoutHandler } from "./tools/poker_claim_payout.js";
+import { pokerClaimRefundHandler } from "./tools/poker_claim_refund.js";
+import { pokerWithdrawPendingDepositHandler } from "./tools/poker_withdraw_pending_deposit.js";
 
 const server = new McpServer({
   name: "arcent-poker-mcp",
@@ -416,10 +420,47 @@ server.tool(
   async (args) => pokerAdvancePhaseHandler(args),
 );
 
+// ── End-user claim tools (P0-4, Codex public-readiness audit 2026-05-11) ──
+// Finalize/cancel sonrasi son kullanici akisini kapatir: agent owner
+// kazandigi/iadesini cekebilsin, depositor kullanmadigi prepay'i geri alabilsin.
+
+server.tool(
+  "poker_claim_payout",
+  "Pull a finalized tournament prize. MS-2 pull-over-push: finalizeFromCallback queues pendingPayout[T][agentId]; only the ERC-8004 owner of agentId can call. Returns 1 unsigned tx.",
+  {
+    player: z.string().describe("Agent owner wallet (must equal IdentityRegistry.ownerOf(agentId))."),
+    tournamentId: z.string().describe("Tournament id (32-byte hex)"),
+    agentId: z.string().describe("ERC-8004 agent token id (numeric string)"),
+  },
+  async (args) => pokerClaimPayoutHandler(args),
+);
+
+server.tool(
+  "poker_claim_refund",
+  "Pull a cancelled-tournament refund (full entry fee — rake never moved during Registering). Only callable when tournament phase is Cancelled and pendingRefund > 0. Same agent-owner gate as claim_payout. Returns 1 unsigned tx.",
+  {
+    player: z.string().describe("Agent owner wallet (must equal IdentityRegistry.ownerOf(agentId))."),
+    tournamentId: z.string().describe("Tournament id (32-byte hex)"),
+    agentId: z.string().describe("ERC-8004 agent token id (numeric string)"),
+  },
+  async (args) => pokerClaimRefundHandler(args),
+);
+
+server.tool(
+  "poker_withdraw_pending_deposit",
+  "Recover an unconsumed depositFor slot. Callable during Registering or Running phases by the original depositor wallet (no agent-ownership requirement). Use when you sent depositFor but never called register, or to clean up a phantom slot. Returns 1 unsigned tx.",
+  {
+    depositor: z.string().describe("Original depositor wallet (must equal the address that originally called depositFor)."),
+    tournamentId: z.string().describe("Tournament id (32-byte hex)"),
+    agentId: z.string().describe("ERC-8004 agent token id (numeric string)"),
+  },
+  async (args) => pokerWithdrawPendingDepositHandler(args),
+);
+
 // CRITICAL: Never console.log — corrupts JSON-RPC pipe
 process.stderr.write("arcent-poker-mcp server starting...\n");
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arcent-poker-mcp server connected. 32 tools registered (17 base + 15 poker).\n");
+process.stderr.write("arcent-poker-mcp server connected. 31 tools registered (13 base + 15 poker + 3 claim).\n");
