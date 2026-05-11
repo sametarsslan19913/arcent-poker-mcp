@@ -4,7 +4,10 @@ import { config } from "./config.js";
 export const arcTestnet = {
   id: config.arcChainId,
   name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+  // Arc native gas: USDC 18-dec (ERC-20 görünüm 6-dec ama nativeCurrency
+  // viem'in formatEther/formatUnits varsayılan dönüşlerinde 18 olmalı).
+  // 2026-05-11 — Codex public-readiness audit P0-1 fix.
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
   rpcUrls: { default: { http: [config.arcRpc] } },
 } as const;
 
