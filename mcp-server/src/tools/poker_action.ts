@@ -1,7 +1,7 @@
 import { encodeFunctionData } from "viem";
 import { arcClient } from "../chains.js";
 import { config } from "../config.js";
-import { PokerBetAbi, PokerActionEnum, type PokerActionLabel } from "../poker-abis.js";
+import { PokerBetAbi, PokerTableAbi, PokerActionEnum, type PokerActionLabel } from "../poker-abis.js";
 import { okResult, errorResult, err } from "../errors.js";
 
 type RoundState = {
@@ -11,6 +11,15 @@ type RoundState = {
   lastAggressor: number;
   actedBitmap: number;
   roundComplete: boolean;
+};
+
+type TableState = {
+  admin: `0x${string}`;
+  currentActor: number;
+};
+
+type SeatState = {
+  player: `0x${string}`;
 };
 
 export async function pokerActionHandler(args: {
@@ -25,8 +34,14 @@ export async function pokerActionHandler(args: {
   if (!player || player === "0x0000000000000000000000000000000000000000") {
     return errorResult(err("E_INVALID_PLAYER", "player address cannot be zero"));
   }
-  if (!tableId || tableId.length !== 66) {
+  if (!tableId || tableId.length !== 66 || !tableId.startsWith("0x")) {
     return errorResult(err("E_INVALID_TABLE_ID", "tableId must be 32-byte hex"));
+  }
+  // 2026-05-14 Codex handoff — `0x0...0` bir bayt-uzunluğu olarak geçerli ama
+  // anlam olarak "table yok" demek. Brain bunu üretebiliyor; on-chain'e gitse
+  // CallerNotAuthorized / TableNotFound revert'ine yol açıyor ve gas yakıyor.
+  if (/^0x0{64}$/i.test(tableId)) {
+    return errorResult(err("E_INVALID_TABLE_ID", "tableId cannot be zero"));
   }
 
   const rawLabel = args.action.toLowerCase();
@@ -67,6 +82,45 @@ export async function pokerActionHandler(args: {
   }
   if (label === "raise" && amount === 0n) {
     return errorResult(err("E_ZERO_AMOUNT", "raise requires amount > 0 (absolute new high-bet target)"));
+  }
+
+  // 2026-05-14 Codex handoff — Pre-flight state validation:
+  //   1) table mevcut mu? (admin=0 ise yok)
+  //   2) currentActor sentinel (255) → bahis turu yok, hiçbir action geçerli değil
+  //   3) player gerçekten currentActor seat'inde mi? (NotYourTurn'ü on-chain'e yansıtmadan döndür)
+  // Read failure E_STATE_READ_FAILED — chains.ts readContractWithRetry retry'i
+  // zaten yutuyor, transient flapping fatal'a dönüşmez.
+  try {
+    const table = (await arcClient.readContract({
+      address: config.pokerTable as `0x${string}`,
+      abi: PokerTableAbi,
+      functionName: "getTable",
+      args: [tableId],
+    })) as TableState;
+    if (!table.admin || /^0x0{40}$/i.test(table.admin)) {
+      return errorResult(err("E_TABLE_NOT_FOUND", "tableId does not exist"));
+    }
+    if (table.currentActor === 255) {
+      return errorResult(err("E_NO_CURRENT_ACTOR", "table has no current betting actor"));
+    }
+
+    const seat = (await arcClient.readContract({
+      address: config.pokerTable as `0x${string}`,
+      abi: PokerTableAbi,
+      functionName: "getSeat",
+      args: [tableId, table.currentActor],
+    })) as SeatState;
+    if (seat.player.toLowerCase() !== player.toLowerCase()) {
+      return errorResult(
+        err(
+          "E_NOT_CURRENT_ACTOR",
+          `player ${player} is not currentActor seat ${table.currentActor} (${seat.player})`,
+        ),
+      );
+    }
+  } catch (e) {
+    const msg = (e as Error).message || String(e);
+    return errorResult(err("E_STATE_READ_FAILED", `failed to validate poker_action state: ${msg.slice(0, 240)}`));
   }
 
   // 2026-05-10 — Raise pre-validation. BetSystem.sol enforces

@@ -16,6 +16,52 @@ export const arcClient = createPublicClient({
   transport: http(config.arcRpc),
 });
 
+// 2026-05-14 Codex handoff — Arc okuma planı flaky. `readContract` çağrıları
+// timeout/429/5xx/network glitch yiyince MCP tool çağrısı fatal görünüyor ama
+// tx aslında zincirde başarılı (Gemini HAND 4 `readContract(getSeat)` river
+// betting'te birden fazla transient hata verdi, retry path kurtardı).
+// Burada `arcClient.readContract`'ı exponential backoff'lu wrapper ile sar:
+//   - max attempts ARC_MCP_READ_RETRY_MAX_ATTEMPTS (default 8)
+//   - base delay ARC_MCP_READ_RETRY_BASE_DELAY_MS (default 500ms)
+//   - max delay ARC_MCP_READ_RETRY_MAX_DELAY_MS (default 10s)
+// Daily quota / hard rate-limit retry edilmez — provider failover ihtiyacı.
+const rawReadContract = arcClient.readContract.bind(arcClient);
+const READ_RETRY_MAX_ATTEMPTS = Number(process.env.ARC_MCP_READ_RETRY_MAX_ATTEMPTS ?? 8);
+const READ_RETRY_BASE_DELAY_MS = Number(process.env.ARC_MCP_READ_RETRY_BASE_DELAY_MS ?? 500);
+const READ_RETRY_MAX_DELAY_MS = Number(process.env.ARC_MCP_READ_RETRY_MAX_DELAY_MS ?? 10_000);
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableReadError(e: unknown): boolean {
+  const message = e instanceof Error ? e.message : String(e);
+  if (/daily request limit reached/i.test(message)) return false;
+  return /timeout|temporarily unavailable|rate limit|too many requests|429|500|502|503|504|ECONNRESET|ETIMEDOUT|fetch failed|network error/i.test(message);
+}
+
+async function readContractWithRetry(args: any): Promise<any> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= READ_RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await rawReadContract(args);
+    } catch (e) {
+      lastErr = e;
+      if (!isRetryableReadError(e) || attempt >= READ_RETRY_MAX_ATTEMPTS) throw e;
+      const delay = Math.min(
+        READ_RETRY_MAX_DELAY_MS,
+        READ_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+      );
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
+
+Object.assign(arcClient, {
+  readContract: readContractWithRetry as typeof arcClient.readContract,
+});
+
 // ── ERC-20 ──
 export const ERC20Abi = [
   {
