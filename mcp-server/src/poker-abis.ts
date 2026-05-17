@@ -379,6 +379,18 @@ export const PokerDealAbi = [
     stateMutability: "view",
   },
   {
+    type: "function", name: "deckSnapshot",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [
+      { name: "pk", type: "uint256[2]" },
+      { name: "c1", type: "uint256[2][52]" },
+      { name: "c2", type: "uint256[2][52]" },
+      { name: "initialized", type: "bool" },
+      { name: "round", type: "uint32" },
+    ],
+    stateMutability: "view",
+  },
+  {
     type: "function", name: "shuffleRound",
     inputs: [{ name: "tableId", type: "bytes32" }],
     outputs: [{ name: "", type: "uint32" }],
@@ -443,6 +455,33 @@ export const PokerDealAbi = [
   },
 ] as const;
 
+export const PokerHandFlowRouterAbi = [
+  {
+    type: "function", name: "startHandAndInitRound",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [
+      { name: "handNumber", type: "uint64" },
+      { name: "dealerButton", type: "uint8" },
+      { name: "sbSeat", type: "uint8" },
+      { name: "bbSeat", type: "uint8" },
+      { name: "firstActor", type: "uint8" },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "advancePhaseAndInitRound",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [{ name: "newPhase", type: "uint8" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "resetCryptoForNextHand",
+    inputs: [{ name: "tableId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
 // DecryptSystem.sol — partial-decryption share collector. B3.7.A introduced
 // per-card threshold (hole = N-1, community = N, burn/unused = 0) and a
 // hole-owner submission block. B3.7.C wires the agent-side path: each
@@ -481,6 +520,20 @@ export const PokerDecryptAbi = [
       { name: "pA",             type: "uint256[2]" },
       { name: "pB",             type: "uint256[2][2]" },
       { name: "pC",             type: "uint256[2]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function", name: "submitPartialDecryptShares",
+    inputs: [
+      { name: "tableId",        type: "bytes32" },
+      { name: "cardIdxs",       type: "uint8[]" },
+      { name: "contributorPk",  type: "uint256[2]" },
+      { name: "d",              type: "uint256[2][]" },
+      { name: "pA",             type: "uint256[2][]" },
+      { name: "pB",             type: "uint256[2][2][]" },
+      { name: "pC",             type: "uint256[2][]" },
     ],
     outputs: [],
     stateMutability: "nonpayable",
