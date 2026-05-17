@@ -323,10 +323,12 @@ server.tool(
 
 server.tool(
   "poker_table_state",
-  "Read live table state: seats (player, agentId, chips, contributions, folded), table (currentActor, phaseName, handNumber, blinds), activeSeats (kanonik in-hand non-folded seat list), round (currentPlayerSeat = TableSystem.currentActor, highBet = RoundState.currentBet, minRaiseAmount = RoundState.minRaise, roundComplete, lastAggressor, actedBitmap).",
+  "Read live table state: seats (player, agentId, chips, contributions, folded), table (currentActor, phaseName, handNumber, blinds), activeSeats (kanonik in-hand non-folded seat list), round (currentPlayerSeat = TableSystem.currentActor, highBet = RoundState.currentBet, minRaiseAmount = RoundState.minRaise, roundComplete, lastAggressor, actedBitmap). Optional `minBlock` (decimal string) reads after head reaches that block — set to last write tx receipt.blockNumber for read-after-write consistency (Codex 2026-05-17 R-F3.12 mitigation).",
   {
     tableId: z.string().describe("Table id"),
     maxSeats: z.number().optional().describe("Number of seat slots to inspect (default 8)"),
+    minBlock: z.string().optional().describe("Decimal string — wait until all read RPCs reach >= this block (read-after-write barrier; use receipt.blockNumber from prior write)"),
+    quorumK: z.number().int().optional().describe("k-of-n quorum size (default ENV ARC_MCP_QUORUM_K, min(2,N))"),
   },
   async (args) => pokerTableStateHandler(args),
 );
@@ -352,11 +354,13 @@ server.tool(
 
 server.tool(
   "poker_hand_start",
-  "Coordinator-side hand bootstrap. Reads all published session pks from DealSystem, sums them on BabyJubJub off-chain to get the joint pk, builds the canonical initial 52-card deck encrypted under the joint pk, and returns an unsignedTx for DealSystem.initDeal. Set `withStartHand: true` to also receive a TableSystem.startHand unsignedTx (caller must be admin or authorized system on the table). Run AFTER all seated agents have called poker_publish_session_pk for this hand. Other agents will independently re-verify the joint pk before submitting their shuffle.",
+  "Coordinator-side hand bootstrap. Reads all published session pks from DealSystem, sums them on BabyJubJub off-chain to get the joint pk, builds the canonical initial 52-card deck encrypted under the joint pk, and returns an unsignedTx for DealSystem.initDeal. Set `withStartHand: true` to also receive a TableSystem.startHand unsignedTx (caller must be admin or authorized system on the table). Run AFTER all seated agents have called poker_publish_session_pk for this hand. Other agents will independently re-verify the joint pk before submitting their shuffle. Optional `minBlock` (decimal string) reads after head reaches that block — set to LAST publishSessionPk receipt.blockNumber for read-after-write consistency (R-F3.12 mitigation, Codex 2026-05-17 mainnet strategy).",
   {
     tableId: z.string().describe("32-byte hex tableId"),
     withStartHand: z.boolean().optional().describe("If true, also returns TableSystem.startHand unsignedTx as `unsignedTxStartHand`."),
     minPks: z.number().int().optional().describe("Minimum number of published pks before assembling joint pk (default 2)."),
+    minBlock: z.string().optional().describe("Decimal string — wait until all read RPCs reach >= this block (read-after-write barrier; use receipt.blockNumber from last publishSessionPk write)"),
+    quorumK: z.number().int().optional().describe("k-of-n quorum size (default ENV ARC_MCP_QUORUM_K, min(2,N))"),
   },
   async (args) => pokerHandStartHandler(args),
 );

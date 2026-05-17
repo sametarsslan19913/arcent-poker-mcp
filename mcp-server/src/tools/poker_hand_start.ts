@@ -21,7 +21,7 @@
 // soon enforce this) and abort if the coordinator's joint pk doesn't match.
 
 import { encodeFunctionData, parseAbi } from "viem";
-import { arcClient } from "../chains.js";
+import { arcClient, readContractQuorum, waitHeadsAtLeast } from "../chains.js";
 import { config } from "../config.js";
 import { PokerDealAbi, PokerTableAbi } from "../poker-abis.js";
 import { okResult, errorResult, err } from "../errors.js";
@@ -76,24 +76,44 @@ export async function pokerHandStartHandler(args: {
   withStartHand?: boolean;
   /** Minimum number of session pks expected before assembling joint pk (defaults to 2). */
   minPks?: number;
+  /**
+   * 2026-05-17 Codex Round 2 — Read-after-write barrier. Caller son
+   * `poker_publish_session_pk` broadcast'inin receipt.blockNumber'ını burada
+   * geçirir. Bu MCP'nin tüm read RPC'lerinin head'i o block'a ulaşana kadar
+   * beklemesini sağlar + read'leri o block'a pin'ler. Quorum k-of-n çoklu RPC
+   * setup'unda race'i yakalar. v9 fail noktası (2/4 PK stale read) tam burada.
+   */
+  minBlock?: string;
+  /** Quorum boyutunu override et (default: ENV ARC_MCP_QUORUM_K) */
+  quorumK?: number;
 }) {
   const tableId = args.tableId as `0x${string}`;
   if (!tableId || tableId.length !== 66 || !tableId.startsWith("0x")) {
     return errorResult(err("E_INVALID_TABLE_ID", "tableId must be 32-byte hex"));
   }
   const minPks = Math.max(1, args.minPks ?? 2);
+  const minBlock = args.minBlock ? BigInt(args.minBlock) : 0n;
+  if (minBlock > 0n) {
+    try {
+      await waitHeadsAtLeast(minBlock);
+    } catch (e) {
+      return errorResult(err("E_HEAD_WAIT_TIMEOUT", (e as Error).message));
+    }
+  }
+  const blockNumber = minBlock > 0n ? minBlock : undefined;
+  const quorumOpts = { blockNumber, k: args.quorumK };
 
   // 1. Read published session pks (full audit trail — eliminated agents
   //    too — used only as a lookup table; jointPk hesabı G14 sonrası bu
   //    listenin TÜMÜ üzerinde değil, aktif hand roster filtresi ile yapılır).
   let entries: readonly { agent: `0x${string}`; pkX: bigint; pkY: bigint }[];
   try {
-    entries = (await arcClient.readContract({
+    entries = await readContractQuorum<readonly { agent: `0x${string}`; pkX: bigint; pkY: bigint }[]>({
       address: config.pokerDeal as `0x${string}`,
       abi: PokerDealAbi,
       functionName: "getSessionPks",
       args: [tableId],
-    })) as readonly { agent: `0x${string}`; pkX: bigint; pkY: bigint }[];
+    }, quorumOpts);
   } catch (e) {
     return errorResult(
       err("E_DEAL_READ", `failed to read session pks: ${(e as Error).message}`),
@@ -116,12 +136,12 @@ export async function pokerHandStartHandler(args: {
   //     seat'lerin player adreslerine ait pk_i'leri toplama dahil ederiz.
   let activeSeatIdx: readonly number[];
   try {
-    activeSeatIdx = (await arcClient.readContract({
+    activeSeatIdx = await readContractQuorum<readonly number[]>({
       address: config.pokerTable as `0x${string}`,
       abi: PokerTableAbi,
       functionName: "nextHandSeats",
       args: [tableId],
-    })) as readonly number[];
+    }, quorumOpts);
   } catch (e) {
     return errorResult(
       err("E_TABLE_READ", `failed to read nextHandSeats: ${(e as Error).message}`),
@@ -137,16 +157,17 @@ export async function pokerHandStartHandler(args: {
   }
 
   // Resolve seat → player address via getSeat, build active address set.
+  // Quorum: aynı pin'lenmiş block'tan multi-RPC read, race yok
   const activePlayers = new Set<string>();
   for (const seatIdx of activeSeatIdx) {
     let seat: { player: `0x${string}` };
     try {
-      seat = (await arcClient.readContract({
+      seat = await readContractQuorum<{ player: `0x${string}` }>({
         address: config.pokerTable as `0x${string}`,
         abi: PokerTableAbi,
         functionName: "getSeat",
         args: [tableId, seatIdx],
-      })) as { player: `0x${string}` };
+      }, quorumOpts);
     } catch (e) {
       return errorResult(
         err("E_TABLE_READ", `failed to read seat ${seatIdx}: ${(e as Error).message}`),

@@ -1,4 +1,4 @@
-import { arcClient } from "../chains.js";
+import { arcClient, readContractQuorum, waitHeadsAtLeast, StateNotFinalError } from "../chains.js";
 import { config } from "../config.js";
 import { PokerTableAbi, PokerBetAbi } from "../poker-abis.js";
 import { okResult, errorResult, err } from "../errors.js";
@@ -18,12 +18,32 @@ const PHASE_NAMES = [
 export async function pokerTableStateHandler(args: {
   tableId: string;
   maxSeats?: number; // default 8
+  /**
+   * 2026-05-17 Codex Round 2 — Read-after-write barrier. Caller bir önceki
+   * write tx'in receipt.blockNumber'ını burada geçirirse, MCP read'i o block'a
+   * pin'ler + tüm read RPC'lerinin head'i o block'a ulaşana kadar bekler.
+   * Çoklu RPC setup'unda ek olarak k-of-n quorum uygulanır.
+   */
+  minBlock?: string;
+  /** Quorum boyutunu override et (default: ENV ARC_MCP_QUORUM_K) */
+  quorumK?: number;
 }) {
   const tableId = args.tableId as `0x${string}`;
   if (!tableId || tableId.length !== 66) {
     return errorResult(err("E_INVALID_TABLE_ID", "tableId must be 32-byte hex"));
   }
   const maxSeats = Math.max(2, Math.min(args.maxSeats ?? 8, 9));
+  const minBlock = args.minBlock ? BigInt(args.minBlock) : 0n;
+  if (minBlock > 0n) {
+    try {
+      await waitHeadsAtLeast(minBlock);
+    } catch (e) {
+      return errorResult(err("E_HEAD_WAIT_TIMEOUT", (e as Error).message));
+    }
+  }
+  // Pinned block — quorum read aynı blocktan, race yok
+  const blockNumber = minBlock > 0n ? minBlock : undefined;
+  const quorumOpts = { blockNumber, k: args.quorumK };
 
   type RawSeat = {
     player: `0x${string}`;
@@ -54,40 +74,41 @@ export async function pokerTableStateHandler(args: {
     | { seatIdx: number; ok: false };
 
   // Query each seat slot in parallel; empty slots come back with player == 0x0.
+  // Quorum k-of-n: çoklu RPC setup'ta state-stale yakalanır.
   const seatCalls: Promise<SeatCall>[] = Array.from({ length: maxSeats }, (_, i) =>
-    arcClient.readContract({
+    readContractQuorum<RawSeat>({
       address: config.pokerTable,
       abi: PokerTableAbi,
       functionName: "getSeat",
       args: [tableId, i],
-    })
-      .then<SeatCall>((r) => ({ seatIdx: i, ok: true, raw: r as RawSeat }))
+    }, quorumOpts)
+      .then<SeatCall>((r) => ({ seatIdx: i, ok: true, raw: r }))
       .catch<SeatCall>(() => ({ seatIdx: i, ok: false })),
   );
 
   const [seats, round, table, activeSeatList] = await Promise.all([
     Promise.all(seatCalls),
-    arcClient.readContract({
+    readContractQuorum({
       address: config.pokerBet,
       abi: PokerBetAbi,
       functionName: "getRound",
       args: [tableId],
-    }).catch(() => null),
-    arcClient.readContract({
+    }, quorumOpts).catch(() => null),
+    readContractQuorum({
       address: config.pokerTable,
       abi: PokerTableAbi,
       functionName: "getTable",
       args: [tableId],
-    }).catch(() => null),
+    }, quorumOpts).catch(() => null),
     // Canonical "still in the hand" set from the contract: occupied + inHand
     // + !folded. Cheaper + safer than recomputing from seat snapshots, since
     // the agent runner uses this to drive its action loop.
-    arcClient.readContract({
+    readContractQuorum<readonly number[]>({
       address: config.pokerTable,
       abi: PokerTableAbi,
       functionName: "activeSeats",
       args: [tableId],
-    }).catch(() => [] as readonly number[]) as Promise<readonly number[]>,
+    }, quorumOpts).catch(() => [] as readonly number[]),
   ]);
 
   const occupied = seats
