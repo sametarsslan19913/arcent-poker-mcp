@@ -30,6 +30,7 @@ import { pokerShuffleProveHandler } from "./tools/poker_shuffle_prove.js";
 import { pokerPublishSessionPkHandler } from "./tools/poker_publish_session_pk.js";
 import { pokerHandStartHandler } from "./tools/poker_hand_start.js";
 import { pokerDecryptShareHandler } from "./tools/poker_decrypt_share.js";
+import { pokerDecryptBatchHandler } from "./tools/poker_decrypt_batch.js";
 import { pokerRecoverCardHandler } from "./tools/poker_recover_card.js";
 import { pokerRoundStatusHandler } from "./tools/poker_round_status.js";
 import { pokerAdvancePhaseHandler } from "./tools/poker_advance_phase.js";
@@ -311,22 +312,24 @@ server.tool(
 
 server.tool(
   "poker_action",
-  "Submit a betting action: fold, check, call, raise, or allin. For raise, amount is the new ABSOLUTE round-level high bet target. For fold/check/call/allin amount must be 0 — the contract derives the call amount from RoundState.currentBet - your seat.currentBet.",
+  "Submit a betting action: fold, check, call, or raise. There is no separate allin action; call/raise can consume the remaining stack and BetSystem marks the seat all-in. For raise, amount is the new ABSOLUTE round-level high bet target. For fold/check/call amount must be 0 — the contract derives the call amount from RoundState.currentBet - your seat.currentBet.",
   {
     player: z.string().describe("Player wallet (must match the seat's player at TableSystem.currentActor)"),
     tableId: z.string().describe("Table id"),
-    action: z.enum(["fold", "check", "call", "raise", "allin"]).describe("Action label"),
-    amount: z.string().optional().describe("Numeric string. Required (>0) for raise = new ABSOLUTE round high bet target. Must be 0 (or omitted) for fold/check/call/allin."),
+    action: z.enum(["fold", "check", "call", "raise"]).describe("Action label"),
+    amount: z.string().optional().describe("Numeric string. Required (>0) for raise = new ABSOLUTE round high bet target. Must be 0 (or omitted) for fold/check/call."),
   },
   async (args) => pokerActionHandler(args),
 );
 
 server.tool(
   "poker_table_state",
-  "Read live table state: seats (player, agentId, chips, contributions, folded), table (currentActor, phaseName, handNumber, blinds), activeSeats (kanonik in-hand non-folded seat list), round (currentPlayerSeat = TableSystem.currentActor, highBet = RoundState.currentBet, minRaiseAmount = RoundState.minRaise, roundComplete, lastAggressor, actedBitmap).",
+  "Read live table state: seats (player, agentId, chips, contributions, folded), table (currentActor, phaseName, handNumber, blinds), activeSeats (kanonik in-hand non-folded seat list), round (currentPlayerSeat = TableSystem.currentActor, highBet = RoundState.currentBet, minRaiseAmount = RoundState.minRaise, roundComplete, lastAggressor, actedBitmap). Optional `minBlock` (decimal string) reads after head reaches that block — set to last write tx receipt.blockNumber for read-after-write consistency (Codex 2026-05-17 R-F3.12 mitigation).",
   {
     tableId: z.string().describe("Table id"),
     maxSeats: z.number().optional().describe("Number of seat slots to inspect (default 8)"),
+    minBlock: z.string().optional().describe("Decimal string — wait until all read RPCs reach >= this block (read-after-write barrier; use receipt.blockNumber from prior write)"),
+    quorumK: z.number().int().optional().describe("k-of-n quorum size (default ENV ARC_MCP_QUORUM_K, min(2,N))"),
   },
   async (args) => pokerTableStateHandler(args),
 );
@@ -352,11 +355,13 @@ server.tool(
 
 server.tool(
   "poker_hand_start",
-  "Coordinator-side hand bootstrap. Reads all published session pks from DealSystem, sums them on BabyJubJub off-chain to get the joint pk, builds the canonical initial 52-card deck encrypted under the joint pk, and returns an unsignedTx for DealSystem.initDeal. Set `withStartHand: true` to also receive a TableSystem.startHand unsignedTx (caller must be admin or authorized system on the table). Run AFTER all seated agents have called poker_publish_session_pk for this hand. Other agents will independently re-verify the joint pk before submitting their shuffle.",
+  "Coordinator-side hand bootstrap. Reads all published session pks from DealSystem, sums them on BabyJubJub off-chain to get the joint pk, builds the canonical initial 52-card deck encrypted under the joint pk, and returns an unsignedTx for DealSystem.initDeal. Set `withStartHand: true` to also receive a TableSystem.startHand unsignedTx (caller must be admin or authorized system on the table). Run AFTER all seated agents have called poker_publish_session_pk for this hand. Other agents will independently re-verify the joint pk before submitting their shuffle. Optional `minBlock` (decimal string) reads after head reaches that block — set to LAST publishSessionPk receipt.blockNumber for read-after-write consistency (R-F3.12 mitigation, Codex 2026-05-17 mainnet strategy).",
   {
     tableId: z.string().describe("32-byte hex tableId"),
     withStartHand: z.boolean().optional().describe("If true, also returns TableSystem.startHand unsignedTx as `unsignedTxStartHand`."),
     minPks: z.number().int().optional().describe("Minimum number of published pks before assembling joint pk (default 2)."),
+    minBlock: z.string().optional().describe("Decimal string — wait until all read RPCs reach >= this block (read-after-write barrier; use receipt.blockNumber from last publishSessionPk write)"),
+    quorumK: z.number().int().optional().describe("k-of-n quorum size (default ENV ARC_MCP_QUORUM_K, min(2,N))"),
   },
   async (args) => pokerHandStartHandler(args),
 );
@@ -364,7 +369,7 @@ server.tool(
 server.tool(
   "poker_shuffle_prove",
   // Tool description tells the LLM brain when to use this; semantics matter.
-  "Generate the agent's encrypted shuffle proof for the current hand. Reads on-chain deck state from DealSystem, picks fresh randomness (permutation σ + per-card r[]), computes re-encrypted output ciphertexts, runs Groth16 proof (snarkjs ~20 s — slow), and returns an unsignedTx that the agent must broadcast. Each agent calls this once per hand in the seating order; the chain advances the deck after each accepted submitShuffle. Call ONLY when it is your turn in the shuffle round and DealSystem.shuffleRound matches your expected order. Optional `seed` makes the proof deterministic (smoke tests only — production must omit for CSPRNG).",
+  "Generate the agent's encrypted shuffle proof for the current hand. Reads on-chain deck state from DealSystem, picks fresh randomness (permutation σ + per-card r[]), computes re-encrypted output ciphertexts, runs Groth16 proof (snarkjs ~20 s — slow), and returns an unsignedTx that the agent must broadcast. Each agent calls this once per hand in the seating order; the chain advances the deck after each accepted submitShuffle. Call ONLY when it is your turn in the shuffle round and DealSystem.shuffleRound matches your expected order. Pass expectedRound to reject stale deck snapshots before proof generation. Optional `seed` makes the proof deterministic (smoke tests only — production must omit for CSPRNG).",
   {
     tableId: z.string().describe("32-byte hex tableId"),
     seed: z
@@ -373,6 +378,7 @@ server.tool(
       .describe(
         "Optional 256-bit hex seed for deterministic permutation. OMIT in production — CSPRNG is used by default.",
       ),
+    expectedRound: z.number().int().optional().describe("Optional DealSystem.shuffleRound expected for this agent. The tool waits briefly and refuses stale deck snapshots."),
   },
   async (args) => pokerShuffleProveHandler(args),
 );
@@ -388,6 +394,18 @@ server.tool(
     forShowdown: z.boolean().optional().describe("Owner showdown reveal — routes to submitOwnerShareForShowdown and bypasses the hole-owner short-circuit. Only valid during Phase.Showdown; default false."),
   },
   async (args) => pokerDecryptShareHandler(args),
+);
+
+server.tool(
+  "poker_decrypt_batch",
+  "Compute several partial decryption shares for the same agent and return one unsignedTx for DecryptSystem.submitPartialDecryptShares. Use this for the flop community-card reveal (three cardIdxs) to keep every DLEQ proof on-chain while reducing tx count. Not for owner showdown reveals.",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    cardIdxs: z.array(z.number().int()).min(1).max(5).describe("Deck slots 0..51, unique. Flop reveal usually passes three community card indexes."),
+    seed: z.string().describe("256-bit hex seed — the same value passed to poker_publish_session_pk this hand"),
+    agentAddress: z.string().optional().describe("Optional agent wallet address — used only for early local hole-owner checks."),
+  },
+  async (args) => pokerDecryptBatchHandler(args),
 );
 
 server.tool(
@@ -463,4 +481,4 @@ process.stderr.write("arcent-poker-mcp server starting...\n");
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arcent-poker-mcp server connected. 31 tools registered (13 base + 15 poker + 3 claim).\n");
+process.stderr.write("arcent-poker-mcp server connected. 32 tools registered (13 base + 16 poker + 3 claim).\n");

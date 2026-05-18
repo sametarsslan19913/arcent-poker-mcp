@@ -29,6 +29,44 @@ import {
 import { makeShuffleProver, proofToSolidityCalldata } from "../zk/prover.js";
 
 const DECK_SIZE = 52;
+type ChainPoint = readonly [bigint, bigint];
+type DeckSnapshot = readonly [
+  ChainPoint,
+  readonly ChainPoint[],
+  readonly ChainPoint[],
+  boolean,
+  number,
+];
+
+// 2026-05-16 — Codex burst rate root-cause handoff. cardCiphertext × 52
+// loop'unun sub-second burst atmasını engelle (saniyenin altında ~200 read
+// pattern direkt RPC provider'a burst rate-limit 429 yedirir, 2026-05-16
+// 17:19+17:47 koşumları). Env-configurable pacing: default 50ms × 52 ≈ 2.6 s
+// ek (toplam shuffle phase ~50s → ~53s, negligible). 0 set ise eski davranış.
+const READ_PACING_MS = Number(process.env.ARC_MCP_READ_PACING_MS ?? 50);
+// 2026-05-18 — Codex audit P1 fix. expectedRound gating için kısa bekleme
+// limiti. RPC'nin gerçekten ilerlemesini bekle ama sonsuz takılma.
+const DECK_ROUND_WAIT_MS = Number(process.env.ARC_MCP_DECK_ROUND_WAIT_MS ?? 12_000);
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// 2026-05-18 — Codex audit P1 fix. 429/timeout/network-level RPC hataları
+// "legacy fallback" demek değil; legacy fallback × 52 read yeni 429 wave
+// üretir. Sadece gerçekten eski-kontrat / decode hatası durumlarında fallback'e
+// düş. Aksi durumlar yukarı fırlat → upstream retry/quorum yutar.
+function shouldUseLegacyDeckReads(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/429|too many requests|rate.?limit|timeout|ECONNRESET|ETIMEDOUT|fetch failed|network/i.test(msg)) {
+    return false;
+  }
+  return /unknown function|function selector|returned no data|could not decode|decode.*zero|execution reverted/i.test(msg);
+}
+
+function mapChainDeckPoints(raw: readonly ChainPoint[], field: string): Point[] {
+  if (raw.length !== DECK_SIZE) {
+    throw new Error(`DealSystem.deckSnapshot returned ${raw.length} ${field} entries; expected ${DECK_SIZE}`);
+  }
+  return raw.map((p) => [p[0], p[1]] as Point);
+}
 
 // 2026-05-16 — Codex burst rate root-cause handoff. cardCiphertext × 52
 // loop'unun sub-second burst atmasını engelle (saniyenin altında ~200 read
@@ -138,7 +176,36 @@ async function verifyJointPkAgainstSessionPks(
 
 async function readDeckFromChain(
   tableId: `0x${string}`,
-): Promise<{ pk: Point; c1: Point[]; c2: Point[] }> {
+): Promise<{ pk: Point; c1: Point[]; c2: Point[]; round: number | null }> {
+  try {
+    const snapshot = (await arcClient.readContract({
+      address: config.pokerDeal as `0x${string}`,
+      abi: PokerDealAbi,
+      functionName: "deckSnapshot",
+      args: [tableId],
+    })) as DeckSnapshot;
+
+    const [pkRaw, c1Raw, c2Raw, isInit, roundRaw] = snapshot;
+    if (!isInit) {
+      throw new Error(
+        "DealSystem not initialized for this tableId — call DealSystem.initDeal first (admin or first agent).",
+      );
+    }
+    return {
+      pk: [pkRaw[0], pkRaw[1]],
+      c1: mapChainDeckPoints(c1Raw, "c1"),
+      c2: mapChainDeckPoints(c2Raw, "c2"),
+      round: Number(roundRaw),
+    };
+  } catch (snapshotErr) {
+    // 2026-05-18 — Codex P1 fix. 429/timeout durumunda legacy × 52 read
+    // fallback'e DÜŞMEme; aynı RPC zaten boğazda. Sadece gerçek old-contract
+    // / decode hataları için legacy patikasını dene.
+    if (!shouldUseLegacyDeckReads(snapshotErr)) {
+      throw snapshotErr;
+    }
+  }
+
   const isInit = (await arcClient.readContract({
     address: config.pokerDeal as `0x${string}`,
     abi: PokerDealAbi,
@@ -175,7 +242,9 @@ async function readDeckFromChain(
     c2.push([r[2], r[3]]);
   }
 
-  return { pk: [pkRaw[0], pkRaw[1]], c1, c2 };
+  // Legacy path: no round info available (older DealSystem). expectedRound
+  // gating in the handler short-circuits when round === null.
+  return { pk: [pkRaw[0], pkRaw[1]], c1, c2, round: null };
 }
 
 export async function pokerShuffleProveHandler(args: {
@@ -184,19 +253,49 @@ export async function pokerShuffleProveHandler(args: {
   seed?: string;
   /** Default true. Set false only for legacy/B3.6 single-admin smoke tests. */
   verifyJointPk?: boolean;
+  /**
+   * Optional expected DealSystem.shuffleRound. When set, the tool waits briefly
+   * for the RPC node to catch up to that round and refuses stale snapshots
+   * before generating the (~20 s) Groth16 proof. Prevents wasted CPU on a deck
+   * the rest of the network has already moved past.
+   */
+  expectedRound?: number;
 }) {
   const tableId = args.tableId as `0x${string}`;
   if (!tableId || tableId.length !== 66) {
     return errorResult(err("E_INVALID_TABLE_ID", "tableId must be 32-byte hex"));
   }
 
-  // 1. Read on-chain deck state.
-  let deck: { pk: Point; c1: Point[]; c2: Point[] };
+  // 1. Read on-chain deck state. With expectedRound set, retry briefly so a
+  // lagging RPC node has a chance to catch up before we either prove or bail.
+  let deck: { pk: Point; c1: Point[]; c2: Point[]; round: number | null };
+  const waitDeadline = Date.now() + DECK_ROUND_WAIT_MS;
   try {
     deck = await readDeckFromChain(tableId);
+    while (
+      args.expectedRound !== undefined &&
+      deck.round !== null &&
+      deck.round < args.expectedRound &&
+      Date.now() < waitDeadline
+    ) {
+      await sleep(500);
+      deck = await readDeckFromChain(tableId);
+    }
   } catch (e) {
     return errorResult(
       err("E_DEAL_READ", `failed to read DealSystem state: ${(e as Error).message}`),
+    );
+  }
+  if (
+    args.expectedRound !== undefined &&
+    deck.round !== null &&
+    deck.round < args.expectedRound
+  ) {
+    return errorResult(
+      err(
+        "E_DECK_STALE",
+        `DealSystem.shuffleRound=${deck.round} but caller expected ${args.expectedRound}; refusing to prove against stale deck snapshot.`,
+      ),
     );
   }
 

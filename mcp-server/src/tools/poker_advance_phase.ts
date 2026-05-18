@@ -28,6 +28,7 @@ import {
   PokerTableAbi,
   PokerBetAbi,
   PokerDealAbi,
+  PokerHandFlowRouterAbi,
   TablePhase,
   TablePhaseLabel,
   communityCardIdxsForNextPhase,
@@ -170,6 +171,33 @@ export async function pokerAdvancePhaseHandler(args: {
     nextPhase === TablePhase.Flop ||
     nextPhase === TablePhase.Turn ||
     nextPhase === TablePhase.River;
+  if (isBettingRoundNext && config.pokerHandFlowRouter) {
+    const routedData = encodeFunctionData({
+      abi: PokerHandFlowRouterAbi,
+      functionName: "advancePhaseAndInitRound",
+      args: [tableId],
+    });
+    return okResult({
+      tableId,
+      fromPhase: phase,
+      fromPhaseLabel: TablePhaseLabel[phase],
+      toPhase: nextPhase,
+      toPhaseLabel: TablePhaseLabel[nextPhase],
+      handNumber: table.handNumber.toString(),
+      occupiedCount: N,
+      communityCardIdxs,
+      isBettingRoundNext,
+      txCount: 1,
+      unsignedTxs: [{
+        to: config.pokerHandFlowRouter,
+        data: routedData,
+        value: "0",
+        chainId: config.arcChainId,
+        label: `HandFlowRouter.advancePhaseAndInitRound (${TablePhaseLabel[phase]} → ${TablePhaseLabel[nextPhase]})`,
+      }],
+      note: `Broadcast the routed tx. It calls TableSystem.advancePhase and BetSystem.initRound atomically for ${TablePhaseLabel[nextPhase]}.`,
+    });
+  }
   if (isBettingRoundNext) {
     const initRoundData = encodeFunctionData({
       abi: PokerBetAbi,
