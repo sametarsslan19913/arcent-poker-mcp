@@ -312,12 +312,12 @@ server.tool(
 
 server.tool(
   "poker_action",
-  "Submit a betting action: fold, check, call, raise, or allin. For raise, amount is the new ABSOLUTE round-level high bet target. For fold/check/call/allin amount must be 0 — the contract derives the call amount from RoundState.currentBet - your seat.currentBet.",
+  "Submit a betting action: fold, check, call, or raise. There is no separate allin action; call/raise can consume the remaining stack and BetSystem marks the seat all-in. For raise, amount is the new ABSOLUTE round-level high bet target. For fold/check/call amount must be 0 — the contract derives the call amount from RoundState.currentBet - your seat.currentBet.",
   {
     player: z.string().describe("Player wallet (must match the seat's player at TableSystem.currentActor)"),
     tableId: z.string().describe("Table id"),
-    action: z.enum(["fold", "check", "call", "raise", "allin"]).describe("Action label"),
-    amount: z.string().optional().describe("Numeric string. Required (>0) for raise = new ABSOLUTE round high bet target. Must be 0 (or omitted) for fold/check/call/allin."),
+    action: z.enum(["fold", "check", "call", "raise"]).describe("Action label"),
+    amount: z.string().optional().describe("Numeric string. Required (>0) for raise = new ABSOLUTE round high bet target. Must be 0 (or omitted) for fold/check/call."),
   },
   async (args) => pokerActionHandler(args),
 );
@@ -369,7 +369,7 @@ server.tool(
 server.tool(
   "poker_shuffle_prove",
   // Tool description tells the LLM brain when to use this; semantics matter.
-  "Generate the agent's encrypted shuffle proof for the current hand. Reads on-chain deck state from DealSystem, picks fresh randomness (permutation σ + per-card r[]), computes re-encrypted output ciphertexts, runs Groth16 proof (snarkjs ~20 s — slow), and returns an unsignedTx that the agent must broadcast. Each agent calls this once per hand in the seating order; the chain advances the deck after each accepted submitShuffle. Call ONLY when it is your turn in the shuffle round and DealSystem.shuffleRound matches your expected order. Optional `seed` makes the proof deterministic (smoke tests only — production must omit for CSPRNG).",
+  "Generate the agent's encrypted shuffle proof for the current hand. Reads on-chain deck state from DealSystem, picks fresh randomness (permutation σ + per-card r[]), computes re-encrypted output ciphertexts, runs Groth16 proof (snarkjs ~20 s — slow), and returns an unsignedTx that the agent must broadcast. Each agent calls this once per hand in the seating order; the chain advances the deck after each accepted submitShuffle. Call ONLY when it is your turn in the shuffle round and DealSystem.shuffleRound matches your expected order. Pass expectedRound to reject stale deck snapshots before proof generation. Optional `seed` makes the proof deterministic (smoke tests only — production must omit for CSPRNG).",
   {
     tableId: z.string().describe("32-byte hex tableId"),
     seed: z
@@ -378,6 +378,7 @@ server.tool(
       .describe(
         "Optional 256-bit hex seed for deterministic permutation. OMIT in production — CSPRNG is used by default.",
       ),
+    expectedRound: z.number().int().optional().describe("Optional DealSystem.shuffleRound expected for this agent. The tool waits briefly and refuses stale deck snapshots."),
   },
   async (args) => pokerShuffleProveHandler(args),
 );
