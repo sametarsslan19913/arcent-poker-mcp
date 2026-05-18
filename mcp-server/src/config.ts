@@ -8,6 +8,18 @@ function env(key: string, fallback?: string): string {
 
 export const config = {
   arcRpc: env("ARC_RPC", "https://rpc.testnet.arc.network"),
+  // Codex 2026-05-13 B2 / Codex 2026-05-16 RPC burst rate root-cause handoff —
+  // opsiyonel TX/READ split + multi-RPC fallback. Hiçbiri set değilse arcRpc
+  // kullanılır (geriye dönük). agent-runner spawn anında bu env'leri geçiriyordu
+  // (smoke-arc-8agent-usdc.ts L1126-1128); burada okumuyorduk → chains.ts
+  // 17:19+17:47 koşumlarında dRPC direct endpoint'e burst atıp 429 yedi.
+  // Şimdi chains.ts viem fallback transport'una besliyor.
+  arcTxRpcUrl: process.env.ARC_TX_RPC_URL ?? null,
+  arcReadRpcUrl: process.env.ARC_READ_RPC_URL ?? null,
+  arcReadRpcUrls: (process.env.ARC_READ_RPC_URLS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0) as string[],
   arcChainId: 5042002,
 
   // Stablecoins (6 decimals)

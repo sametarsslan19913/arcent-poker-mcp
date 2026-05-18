@@ -1,5 +1,21 @@
-import { createPublicClient, http } from "viem";
+import { createPublicClient, fallback, http, type PublicClient } from "viem";
 import { config } from "./config.js";
+
+// 2026-05-16 — Codex burst rate root-cause handoff. arcClient transport,
+// ARC_READ_RPC_URLS set ise viem fallback'e geçer (primary + extras, sıralı
+// failover). Tek-URL ise eski davranış aynı kalır. Mevcut readContractWithRetry
+// aşağıdaki wrapper aynı kalır → iki kademe koruma:
+//   (1) viem fallback transport: bir provider 5xx/timeout verince diğerine geçer
+//   (2) readContractWithRetry: 429/transient'leri exp-backoff ile yutar
+// Primary = ARC_READ_RPC_URL || ARC_RPC. Extras = ARC_READ_RPC_URLS CSV.
+const READ_PRIMARY = config.arcReadRpcUrl ?? config.arcRpc;
+const READ_URLS = Array.from(new Set([READ_PRIMARY, ...config.arcReadRpcUrls]));
+const readTransport = READ_URLS.length === 1
+  ? http(READ_URLS[0])
+  : fallback(
+      READ_URLS.map((u) => http(u)),
+      { rank: false, retryCount: 0 },
+    );
 
 export const arcTestnet = {
   id: config.arcChainId,
@@ -8,12 +24,12 @@ export const arcTestnet = {
   // viem'in formatEther/formatUnits varsayılan dönüşlerinde 18 olmalı).
   // 2026-05-11 — Codex public-readiness audit P0-1 fix.
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-  rpcUrls: { default: { http: [config.arcRpc] } },
+  rpcUrls: { default: { http: READ_URLS } },
 } as const;
 
-export const arcClient = createPublicClient({
+export const arcClient: PublicClient = createPublicClient({
   chain: arcTestnet,
-  transport: http(config.arcRpc),
+  transport: readTransport,
 });
 
 // 2026-05-14 Codex handoff — Arc okuma planı flaky. `readContract` çağrıları

@@ -30,6 +30,14 @@ import { makeShuffleProver, proofToSolidityCalldata } from "../zk/prover.js";
 
 const DECK_SIZE = 52;
 
+// 2026-05-16 — Codex burst rate root-cause handoff. cardCiphertext × 52
+// loop'unun sub-second burst atmasını engelle (saniyenin altında ~200 read
+// pattern direkt RPC provider'a burst rate-limit 429 yedirir, 2026-05-16
+// 17:19+17:47 koşumları). Env-configurable pacing: default 50ms × 52 ≈ 2.6 s
+// ek (toplam shuffle phase ~50s → ~53s, negligible). 0 set ise eski davranış.
+const READ_PACING_MS = Number(process.env.ARC_MCP_READ_PACING_MS ?? 50);
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 /**
  * Self-verify: independently sum the session pks the contract has on file
  * for this table and assert it equals the deck's stored joint pk. If not,
@@ -151,10 +159,12 @@ async function readDeckFromChain(
   })) as readonly [bigint, bigint];
 
   // 52 sequential calls; not parallelised because Promise.all of 52 RPCs to a
-  // small RPC tends to throttle. If this becomes a bottleneck we batch later.
+  // small RPC tends to throttle. 2026-05-16: even sequential without pacing
+  // bursts ~200 reads/sec → provider rate-limit 429. Inter-call sleep above.
   const c1: Point[] = [];
   const c2: Point[] = [];
   for (let i = 0; i < DECK_SIZE; i++) {
+    if (i > 0 && READ_PACING_MS > 0) await sleep(READ_PACING_MS);
     const r = (await arcClient.readContract({
       address: config.pokerDeal as `0x${string}`,
       abi: PokerDealAbi,

@@ -20,6 +20,14 @@ type TableState = {
 
 type SeatState = {
   player: `0x${string}`;
+  agentId: `0x${string}`;
+  chips: bigint;
+  occupied: boolean;
+  inHand: boolean;
+  folded: boolean;
+  allIn: boolean;
+  currentBet: bigint;
+  handContribution: bigint;
 };
 
 export async function pokerActionHandler(args: {
@@ -84,12 +92,19 @@ export async function pokerActionHandler(args: {
     return errorResult(err("E_ZERO_AMOUNT", "raise requires amount > 0 (absolute new high-bet target)"));
   }
 
-  // 2026-05-14 Codex handoff — Pre-flight state validation:
+  // 2026-05-14 Codex handoff + 2026-05-17 brain-validation extension —
+  // Pre-flight state validation:
   //   1) table mevcut mu? (admin=0 ise yok)
   //   2) currentActor sentinel (255) → bahis turu yok, hiçbir action geçerli değil
   //   3) player gerçekten currentActor seat'inde mi? (NotYourTurn'ü on-chain'e yansıtmadan döndür)
+  //   4) Check yasal mı? (callAmount=round.currentBet - seat.currentBet > 0 ise Check → CannotCheck revert)
+  //   5) Raise min-raise threshold (mevcut Codex pattern, getRound read'i bu blokta birleştirildi)
   // Read failure E_STATE_READ_FAILED — chains.ts readContractWithRetry retry'i
   // zaten yutuyor, transient flapping fatal'a dönüşmez.
+  let seatCurrentBet = 0n;
+  let roundCurrentBet = 0n;
+  let roundMinRaise = 0n;
+  let roundReadOk = false;
   try {
     const table = (await arcClient.readContract({
       address: config.pokerTable as `0x${string}`,
@@ -118,9 +133,48 @@ export async function pokerActionHandler(args: {
         ),
       );
     }
+    seatCurrentBet = seat.currentBet;
+
+    try {
+      const round = (await arcClient.readContract({
+        address: config.pokerBet as `0x${string}`,
+        abi: PokerBetAbi,
+        functionName: "getRound",
+        args: [tableId],
+      })) as RoundState;
+      roundCurrentBet = round.currentBet;
+      roundMinRaise = round.minRaise;
+      roundReadOk = true;
+    } catch {
+      // getRound transient blip — surface as E_STATE_READ_FAILED only if
+      // the action needs round state (check/raise). Fold/call gracefully
+      // degrade to on-chain enforcement.
+    }
   } catch (e) {
     const msg = (e as Error).message || String(e);
     return errorResult(err("E_STATE_READ_FAILED", `failed to validate poker_action state: ${msg.slice(0, 240)}`));
+  }
+
+  // 2026-05-17 — Check legality. BetSystem.act enforces
+  // `_callAmount(r,s) == 0` for Check (CannotCheck revert otherwise).
+  // _callAmount = max(0, r.currentBet - s.currentBet). Brain LLMs frequently
+  // emit Check at preflop UTG (where BB=100, seat.currentBet=0 → callAmount=100)
+  // because their state-summary parser overlooks the round high bet. Pre-check
+  // here returns a helpful error so the brain can retry with call/fold/raise
+  // without burning gas on a CannotCheck revert.
+  if (label === "check") {
+    if (!roundReadOk) {
+      return errorResult(err("E_STATE_READ_FAILED", "could not read round state to validate check legality"));
+    }
+    const callAmount = roundCurrentBet > seatCurrentBet ? roundCurrentBet - seatCurrentBet : 0n;
+    if (callAmount > 0n) {
+      return errorResult(
+        err(
+          "E_CANNOT_CHECK",
+          `Check illegal: round.currentBet=${roundCurrentBet}, seat.currentBet=${seatCurrentBet}, callAmount=${callAmount}. Valid actions: call (matches ${callAmount}), raise (>= ${roundCurrentBet + roundMinRaise}), fold.`,
+        ),
+      );
+    }
   }
 
   // 2026-05-10 — Raise pre-validation. BetSystem.sol enforces
@@ -129,29 +183,15 @@ export async function pokerActionHandler(args: {
   // absolute vs. delta semantics is subtle. Pre-check here surfaces a helpful
   // error so the brain can retry with a valid amount instead of paying gas to
   // see RaiseTooSmall on-chain.
-  if (label === "raise") {
-    try {
-      const round = (await arcClient.readContract({
-        address: config.pokerBet as `0x${string}`,
-        abi: PokerBetAbi,
-        functionName: "getRound",
-        args: [tableId],
-      })) as RoundState;
-      const minAcceptable = round.currentBet + round.minRaise;
-      if (amount < minAcceptable) {
-        return errorResult(
-          err(
-            "E_RAISE_TOO_SMALL",
-            `raise amount ${amount} < currentBet(${round.currentBet}) + minRaise(${round.minRaise}) = ${minAcceptable}. Use amount >= ${minAcceptable}, or pick 'call' to match currentBet, or 'fold'.`,
-          ),
-        );
-      }
-    } catch (e) {
-      // Read failure shouldn't block — let on-chain validate.
-      const msg = (e as Error).message || String(e);
-      // Silently skip pre-check; on-chain still enforces. Logging through
-      // errorResult would be too noisy for transient RPC blips.
-      void msg;
+  if (label === "raise" && roundReadOk) {
+    const minAcceptable = roundCurrentBet + roundMinRaise;
+    if (amount < minAcceptable) {
+      return errorResult(
+        err(
+          "E_RAISE_TOO_SMALL",
+          `raise amount ${amount} < currentBet(${roundCurrentBet}) + minRaise(${roundMinRaise}) = ${minAcceptable}. Use amount >= ${minAcceptable}, or pick 'call' to match currentBet, or 'fold'.`,
+        ),
+      );
     }
   }
 
