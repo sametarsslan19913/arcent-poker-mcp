@@ -29,6 +29,14 @@ import {
 import { makeShuffleProver, proofToSolidityCalldata } from "../zk/prover.js";
 
 const DECK_SIZE = 52;
+type ChainPoint = readonly [bigint, bigint];
+type DeckSnapshot = readonly [
+  ChainPoint,
+  readonly ChainPoint[],
+  readonly ChainPoint[],
+  boolean,
+  number,
+];
 
 // 2026-05-16 — Codex burst rate root-cause handoff. cardCiphertext × 52
 // loop'unun sub-second burst atmasını engelle (saniyenin altında ~200 read
@@ -37,6 +45,13 @@ const DECK_SIZE = 52;
 // ek (toplam shuffle phase ~50s → ~53s, negligible). 0 set ise eski davranış.
 const READ_PACING_MS = Number(process.env.ARC_MCP_READ_PACING_MS ?? 50);
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+function mapChainDeckPoints(raw: readonly ChainPoint[], field: string): Point[] {
+  if (raw.length !== DECK_SIZE) {
+    throw new Error(`DealSystem.deckSnapshot returned ${raw.length} ${field} entries; expected ${DECK_SIZE}`);
+  }
+  return raw.map((p) => [p[0], p[1]] as Point);
+}
 
 /**
  * Self-verify: independently sum the session pks the contract has on file
@@ -139,6 +154,35 @@ async function verifyJointPkAgainstSessionPks(
 async function readDeckFromChain(
   tableId: `0x${string}`,
 ): Promise<{ pk: Point; c1: Point[]; c2: Point[] }> {
+  try {
+    const snapshot = (await arcClient.readContract({
+      address: config.pokerDeal as `0x${string}`,
+      abi: PokerDealAbi,
+      functionName: "deckSnapshot",
+      args: [tableId],
+    })) as DeckSnapshot;
+
+    const [pkRaw, c1Raw, c2Raw, isInit] = snapshot;
+    if (!isInit) {
+      throw new Error(
+        "DealSystem not initialized for this tableId — call DealSystem.initDeal first (admin or first agent).",
+      );
+    }
+    return {
+      pk: [pkRaw[0], pkRaw[1]],
+      c1: mapChainDeckPoints(c1Raw, "c1"),
+      c2: mapChainDeckPoints(c2Raw, "c2"),
+    };
+  } catch (snapshotErr) {
+    const msg = snapshotErr instanceof Error ? snapshotErr.message : String(snapshotErr);
+    if (!/function selector|unknown function|not found|execution reverted|returned no data|zero data/i.test(msg)) {
+      throw snapshotErr;
+    }
+    // Older DealSystem deployments do not expose deckSnapshot yet. Keep the
+    // legacy paced read path so this MCP remains backward-compatible while new
+    // deployments collapse 54 read RPCs into one eth_call.
+  }
+
   const isInit = (await arcClient.readContract({
     address: config.pokerDeal as `0x${string}`,
     abi: PokerDealAbi,

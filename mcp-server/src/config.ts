@@ -59,6 +59,7 @@ export const config = {
   pokerShowdown:     env("POKER_SHOWDOWN_SYSTEM") as `0x${string}`,
   pokerDeal:         env("POKER_DEAL_SYSTEM")  as `0x${string}`,
   pokerDecrypt:      env("POKER_DECRYPT_SYSTEM") as `0x${string}`,
+  pokerHandFlowRouter: process.env.POKER_HAND_FLOW_ROUTER as `0x${string}` | undefined,
 
   // ZK shuffle artifacts (B3.6). N=52 deck, snarkjs Groth16 production verifier.
   // Prover backend swappable: "snarkjs" (default, JS, ~20 s/proof) or "rapidsnark" (B3.6.5, C++ native, ~3-4 s/proof).

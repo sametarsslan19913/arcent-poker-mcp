@@ -30,6 +30,7 @@ import { pokerShuffleProveHandler } from "./tools/poker_shuffle_prove.js";
 import { pokerPublishSessionPkHandler } from "./tools/poker_publish_session_pk.js";
 import { pokerHandStartHandler } from "./tools/poker_hand_start.js";
 import { pokerDecryptShareHandler } from "./tools/poker_decrypt_share.js";
+import { pokerDecryptBatchHandler } from "./tools/poker_decrypt_batch.js";
 import { pokerRecoverCardHandler } from "./tools/poker_recover_card.js";
 import { pokerRoundStatusHandler } from "./tools/poker_round_status.js";
 import { pokerAdvancePhaseHandler } from "./tools/poker_advance_phase.js";
@@ -395,6 +396,18 @@ server.tool(
 );
 
 server.tool(
+  "poker_decrypt_batch",
+  "Compute several partial decryption shares for the same agent and return one unsignedTx for DecryptSystem.submitPartialDecryptShares. Use this for the flop community-card reveal (three cardIdxs) to keep every DLEQ proof on-chain while reducing tx count. Not for owner showdown reveals.",
+  {
+    tableId: z.string().describe("32-byte hex tableId"),
+    cardIdxs: z.array(z.number().int()).min(1).max(5).describe("Deck slots 0..51, unique. Flop reveal usually passes three community card indexes."),
+    seed: z.string().describe("256-bit hex seed — the same value passed to poker_publish_session_pk this hand"),
+    agentAddress: z.string().optional().describe("Optional agent wallet address — used only for early local hole-owner checks."),
+  },
+  async (args) => pokerDecryptBatchHandler(args),
+);
+
+server.tool(
   "poker_recover_card",
   "Off-chain plaintext recovery for one card slot. Reads every share published on DecryptSystem, sums them on BabyJubJub, computes m = c2 − Σ shares, then maps m to a canonical card identity 1..52 (and decodes suit/rank). For COMMUNITY cards anyone can call this — all shares live on chain. For HOLE cards only the owner can recover: pass `ownerSeed` (the seed they used in poker_publish_session_pk) so the tool can compute the missing owner share locally without ever transmitting sk_owner. Returns identity 0 with a warning if the recovered point doesn't match any m_k = k·G (cause: missing/duplicate shares, wrong joint pk, etc).",
   {
@@ -467,4 +480,4 @@ process.stderr.write("arcent-poker-mcp server starting...\n");
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-process.stderr.write("arcent-poker-mcp server connected. 31 tools registered (13 base + 15 poker + 3 claim).\n");
+process.stderr.write("arcent-poker-mcp server connected. 32 tools registered (13 base + 16 poker + 3 claim).\n");
